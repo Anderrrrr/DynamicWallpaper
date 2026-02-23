@@ -1,0 +1,20 @@
+HWND: 00000000001907BC | Class: WorkerW | Text:  | Vis: 0
+HWND: 00000000000107B6 | Class: WorkerW | Text:  | Vis: 0
+HWND: 00000000000304F2 | Class: WorkerW | Text:  | Vis: 0
+HWND: 0000000000010298 | Class: WorkerW | Text:  | Vis: 0
+HWND: 000000000001027E | Class: WorkerW | Text:  | Vis: 0
+HWND: 0000000000010218 | Class: WorkerW | Text:  | Vis: 0
+HWND: 00000000000101F2 | Class: WorkerW | Text:  | Vis: 0
+HWND: 00000000000101F4 | Class: WorkerW | Text:  | Vis: 0
+HWND: 0000000000010166 | Class: WorkerW | Text:  | Vis: 0
+HWND: 0000000000010164 | Class: WorkerW | Text:  | Vis: 0
+HWND: 0000000000010162 | Class: WorkerW | Text:  | Vis: 0
+HWND: 000000000001014A | Class: WorkerW | Text:  | Vis: 0
+HWND: 0000000000010148 | Class: WorkerW | Text:  | Vis: 0
+HWND: 0000000000010150 | Class: Progman | Text: Program Manager | Vis: 1
+  HWND: 0000000000010154 | Class: SHELLDLL_DefView | Text:  | Vis: 1
+    HWND: 0000000000010156 | Class: SysListView32 | Text: FolderView | Vis: 1
+      HWND: 000000000001015A | Class: SysHeader32 | Text:  | Vis: 0
+  HWND: 0000000000510570 | Class: WorkerW | Text:  | Vis: 1
+    HWND: 0000000000A203B6 | Class: DynamicWallpaperClass | Text: Dynamic Wallpaper | Vis: 1
+    HWND: 00000000014C0AE0 | Class: DynamicWallpaperClass | Text: Dynamic Wallpaper | Vis: 1

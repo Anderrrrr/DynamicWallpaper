@@ -1,0 +1,24 @@
+[TARGET] Progman HWND: 0000000000010150
+  [CHILD] HWND: 0000000000010154 | Class: SHELLDLL_DefView | Text:  | Visible: 1
+  [CHILD] HWND: 0000000000010156 | Class: SysListView32 | Text: FolderView | Visible: 1
+  [CHILD] HWND: 000000000001015A | Class: SysHeader32 | Text:  | Visible: 0
+  [CHILD] HWND: 0000000000510570 | Class: WorkerW | Text:  | Visible: 1
+  [CHILD] HWND: 0000000000160A0C | Class: DynamicWallpaperClass | Text: Dynamic Wallpaper | Visible: 1
+  [CHILD] HWND: 00000000001D0AF8 | Class: DynamicWallpaperClass | Text: Dynamic Wallpaper | Visible: 1
+
+------------------
+
+[TARGET] WorkerW HWND: 000000000001018C | Visible: 0
+[TARGET] WorkerW HWND: 00000000001907BC | Visible: 0
+[TARGET] WorkerW HWND: 00000000000107B6 | Visible: 0
+[TARGET] WorkerW HWND: 00000000000304F2 | Visible: 0
+[TARGET] WorkerW HWND: 0000000000010298 | Visible: 0
+[TARGET] WorkerW HWND: 000000000001027E | Visible: 0
+[TARGET] WorkerW HWND: 0000000000010218 | Visible: 0
+[TARGET] WorkerW HWND: 00000000000101F2 | Visible: 0
+[TARGET] WorkerW HWND: 00000000000101F4 | Visible: 0
+[TARGET] WorkerW HWND: 0000000000010166 | Visible: 0
+[TARGET] WorkerW HWND: 0000000000010164 | Visible: 0
+[TARGET] WorkerW HWND: 0000000000010162 | Visible: 0
+[TARGET] WorkerW HWND: 000000000001014A | Visible: 0
+[TARGET] WorkerW HWND: 0000000000010148 | Visible: 0

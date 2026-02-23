@@ -1,0 +1,209 @@
+--- Visible Top Level Windows ---
+HWND: 00000000003E0920 | Class: GDI+ Hook Window Class | Text: GDI+ Window (AsusOSD.exe) | Visible: 0
+HWND: 00000000000900C0 | Class: ThumbnailDeviceHelperWnd | Text:  | Visible: 1
+HWND: 00000000000101B8 | Class: ForegroundStaging | Text:  | Visible: 0
+HWND: 000000000001017C | Class: ForegroundStaging | Text:  | Visible: 0
+HWND: 0000000000020466 | Class: DiscordDesktopOverlayInputTrap | Text: Discord Overlay Input Trap | Visible: 0
+HWND: 0000000000010140 | Class: tooltips_class32 | Text:  | Visible: 0
+HWND: 000000000004011E | Class: Shell_TrayWnd | Text:  | Visible: 1
+HWND: 000000000001021E | Class: SystemTray_Main | Text: 電池計量表 | Visible: 0
+HWND: 0000000000010276 | Class: ATL:00007FFA5856C050 | Text:  | Visible: 0
+HWND: 0000000000010158 | Class: tooltips_class32 | Text:  | Visible: 0
+HWND: 00000000004C04C6 | Class: tooltips_class32 | Text:  | Visible: 0
+HWND: 0000000000100908 | Class: tooltips_class32 | Text:  | Visible: 0
+HWND: 00000000003603F4 | Class: Chrome_WidgetWin_1 | Text: DynamicWallpaperSource - Antigravity - main.cpp | Visible: 1
+HWND: 00000000006D0AFC | Class: EVRFullscreenVideo | Text: EVR Fullscreen Window | Visible: 0
+HWND: 0000000000180B0C | Class: EVRFullscreenVideo | Text: EVR Fullscreen Window | Visible: 0
+HWND: 0000000000280674 | Class: TaskManagerWindow | Text: 工作管理員 | Visible: 1
+HWND: 000000000001016E | Class: ApplicationManager_DesktopShellWindow | Text:  | Visible: 0
+HWND: 00000000000403C6 | Class: tooltips_class32 | Text:  | Visible: 0
+HWND: 0000000000150024 | Class: CabinetWClass | Text: DynamicWallpaperSource - 檔案總管 | Visible: 1
+HWND: 0000000000130940 | Class: tooltips_class32 | Text:  | Visible: 0
+HWND: 000000000010039C | Class: TrayiconMessageWindow | Text:  | Visible: 0
+HWND: 00000000000104EE | Class: Windows.UI.Core.CoreWindow | Text: 設定 | Visible: 1
+HWND: 0000000000440572 | Class: PseudoConsoleWindow | Text:  | Visible: 0
+HWND: 000000000005062C | Class: Windows.UI.Core.CoreWindow | Text: DesktopWindowXamlSource | Visible: 0
+HWND: 00000000002905AC | Class: GDI+ Hook Window Class | Text: GDI+ Window (VCTIP.EXE) | Visible: 0
+HWND: 00000000001A0396 | Class: .NET-BroadcastEventWindow.4.0.0.0.37a9c05.0 | Text: .NET-BroadcastEventWindow.4.0.0.0.37a9c05.0 | Visible: 0
+HWND: 00000000001409B0 | Class: PseudoConsoleWindow | Text:  | Visible: 0
+HWND: 00000000002808E0 | Class: Chrome_WidgetWin_0 | Text:  | Visible: 0
+HWND: 0000000000040378 | Class: PseudoConsoleWindow | Text:  | Visible: 0
+HWND: 000000000006040E | Class: Chrome_WidgetWin_0 | Text:  | Visible: 0
+HWND: 00000000001C0736 | Class: Chrome_WidgetWin_1 | Text: Launchpad | Visible: 0
+HWND: 0000000000060392 | Class: Chrome_WidgetWin_0 | Text:  | Visible: 0
+HWND: 000000000009020C | Class: crashpad_SessionEndWatcher | Text:  | Visible: 0
+HWND: 000000000007086A | Class: Electron_SystemPreferencesHostWindow | Text:  | Visible: 0
+HWND: 00000000001B07F8 | Class: Chrome_WidgetWin_0 | Text:  | Visible: 0
+HWND: 000000000018040A | Class: Base_PowerMessageWindow | Text:  | Visible: 0
+HWND: 00000000001907BC | Class: WorkerW | Text:  | Visible: 0
+HWND: 00000000001007F4 | Class: GDI+ Hook Window Class | Text: GDI+ Window (OneDrive.exe) | Visible: 0
+HWND: 0000000000110660 | Class: SkyDrive Class Name {026CC316-C268-4EAC-B8FB-AA51BFE323E2} | Text:  | Visible: 0
+HWND: 0000000000070878 | Class: Chrome_WidgetWin_0 | Text:  | Visible: 0
+HWND: 00000000002E0508 | Class: Chrome_WidgetWin_0 | Text:  | Visible: 0
+HWND: 0000000000100666 | Class: Base_PowerMessageWindow | Text:  | Visible: 0
+HWND: 0000000000010776 | Class: Chrome_WidgetWin_1 | Text: Unity Hub 3.14.2 | Visible: 0
+HWND: 0000000000010472 | Class: Chrome_WidgetWin_1 | Text: #一般 | 我們這一家 - Discord | Visible: 0
+HWND: 000000000004097A | Class: OperationStatusWindow | Text: 100% 已完成 | Visible: 0
+HWND: 00000000001606D4 | Class: CNewOsd | Text: ATKOSD2 | Visible: 0
+HWND: 0000000000100110 | Class: ATKOSD2 MainFrm Class | Text: ATKOSD2 MainFrm Window (Help) | Visible: 0
+HWND: 00000000000E05C6 | Class: WinUIDesktopWin32WindowClass | Text: 相片 | Visible: 0
+HWND: 000000000022064C | Class: HwndWrapper[AsusSoftwareManagerAgent.exe;;66e6968c-32d2-4f3d-90d7-28465b15f51b] | Text:  | Visible: 0
+HWND: 00000000000E09F0 | Class: HCONTROL | Text: HControl | Visible: 0
+HWND: 000000000019075C | Class: .NET-BroadcastEventWindow.21af1a5.0 | Text: .NET-BroadcastEventWindow.21af1a5.0 | Visible: 0
+HWND: 0000000000100806 | Class: WinUIDesktopWin32WindowClass | Text: Gemini_Generated_Image_ntn1cyntn1cyntn1.png | Visible: 1
+HWND: 00000000000308EE | Class: GDI+ Hook Window Class | Text: GDI+ Window (Explorer.EXE) | Visible: 0
+HWND: 00000000000C0690 | Class: ime15.imecfmui.server | Text:  | Visible: 0
+HWND: 0000000000080710 | Class: COMTASKSWINDOWCLASS | Text: Task Host Window | Visible: 0
+HWND: 000000000003076A | Class: Chrome_WidgetWin_0 | Text:  | Visible: 0
+HWND: 00000000000107B6 | Class: WorkerW | Text:  | Visible: 0
+HWND: 0000000000010798 | Class: Chrome_WidgetWin_0 | Text:  | Visible: 0
+HWND: 000000000001076E | Class: Electron_NotifyIconHostWindow | Text:  | Visible: 0
+HWND: 00000000000506CA | Class: crashpad_SessionEndWatcher | Text:  | Visible: 0
+HWND: 00000000001206C6 | Class: Electron_SystemPreferencesHostWindow | Text:  | Visible: 0
+HWND: 00000000000606C8 | Class: Chrome_WidgetWin_0 | Text:  | Visible: 0
+HWND: 00000000000506B6 | Class: Base_PowerMessageWindow | Text:  | Visible: 0
+HWND: 00000000000105F4 | Class: wingetWindow | Text: WingetMessageOnlyWindow | Visible: 0
+HWND: 000000000016046C | Class: SystemSettingsHandlerWorkerWindowSta-00007FFA59780000 | Text:  | Visible: 0
+HWND: 00000000000304F2 | Class: WorkerW | Text:  | Visible: 0
+HWND: 000000000008001A | Class: Windows.UI.Core.CoreWindow | Text: DesktopWindowXamlSource | Visible: 0
+HWND: 000000000002048A | Class: Chrome_WidgetWin_0 | Text:  | Visible: 0
+HWND: 0000000000010488 | Class: Electron_NotifyIconHostWindow | Text:  | Visible: 0
+HWND: 0000000000010474 | Class: Chrome_WidgetWin_0 | Text:  | Visible: 0
+HWND: 0000000000F00432 | Class: Chrome_WidgetWin_0 | Text:  | Visible: 0
+HWND: 0000000000060036 | Class: crashpad_SessionEndWatcher | Text:  | Visible: 0
+HWND: 0000000000040272 | Class: Base_PowerMessageWindow | Text:  | Visible: 0
+HWND: 00000000000303C0 | Class: ATL:00007FFA60B1E000 | Text:  | Visible: 0
+HWND: 00000000000302BC | Class: SecHealth Window Class | Text: SecurityHealthSystray | Visible: 0
+HWND: 00000000000103C2 | Class: RealtekAudioBackgroundProcessClass | Text: RealtekAudioBackgroundProcessClass | Visible: 0
+HWND: 0000000000010298 | Class: WorkerW | Text:  | Visible: 0
+HWND: 000000000001029A | Class: MS_WebcheckMonitor | Text: MS_WebcheckMonitor | Visible: 0
+HWND: 0000000000010292 | Class: BluetoothNotificationAreaIconWindowClass | Text: BluetoothNotificationAreaIconWindowClass | Visible: 0
+HWND: 000000000001027E | Class: WorkerW | Text:  | Visible: 0
+HWND: 000000000001026C | Class: MiracastConnectionWindow | Text: MiracastConnectionWindow | Visible: 0
+HWND: 0000000000010218 | Class: WorkerW | Text:  | Visible: 0
+HWND: 0000000000010190 | Class: Postures Broadcast Listener Class | Text:  | Visible: 0
+HWND: 00000000000101A2 | Class: EdgeUiInputTopWndClass | Text:  | Visible: 1
+HWND: 00000000000101A8 | Class: TabletModeCoverWindow | Text:  | Visible: 0
+HWND: 00000000000101F2 | Class: WorkerW | Text:  | Visible: 0
+HWND: 00000000000101F4 | Class: WorkerW | Text:  | Visible: 0
+HWND: 00000000000101AA | Class: DummyDWMListenerWindow | Text:  | Visible: 1
+HWND: 0000000000010184 | Class: DummyDWMListenerWindow | Text:  | Visible: 1
+HWND: 0000000000010182 | Class: DummyDWMListenerWindow | Text:  | Visible: 1
+HWND: 0000000000010180 | Class: DummyDWMListenerWindow | Text:  | Visible: 1
+HWND: 000000000001017E | Class: DummyDWMListenerWindow | Text:  | Visible: 1
+HWND: 00000000000400D8 | Class: GamingFallbackWindow | Text:  | Visible: 0
+HWND: 0000000000010166 | Class: WorkerW | Text:  | Visible: 0
+HWND: 0000000000010164 | Class: WorkerW | Text:  | Visible: 0
+HWND: 0000000000010162 | Class: WorkerW | Text:  | Visible: 0
+HWND: 000000000001014A | Class: WorkerW | Text:  | Visible: 0
+HWND: 0000000000010148 | Class: WorkerW | Text:  | Visible: 0
+HWND: 000000000009002A | Class: HelperWndClass | Text:  | Visible: 0
+HWND: 0000000000010102 | Class: CrossDeviceResumeWindowClass | Text: CrossDeviceResumeWindow | Visible: 0
+HWND: 00000000000100EA | Class: ASUSHITSENDSCANCODE | Text: AsusInputlocaleMonitor | Visible: 0
+HWND: 00000000000100DE | Class: #32770 | Text: The Event Manager Dashboard | Visible: 0
+HWND: 000000000003001E | Class: DDEMLEvent | Text:  | Visible: 0
+HWND: 0000000000030018 | Class: DDEMLMom | Text:  | Visible: 0
+HWND: 00000000000100B8 | Class: PushNotificationsPowerManagement | Text: Windows Push Notifications Platform | Visible: 0
+HWND: 0000000000020026 | Class: COMTASKSWINDOWCLASS | Text: Task Host Window | Visible: 0
+HWND: 0000000000020038 | Class: Dwm | Text: DWM Notification Window | Visible: 0
+HWND: 0000000000020262 | Class: CicLoaderWndClass | Text:  | Visible: 0
+HWND: 00000000000202DA | Class: Windows.UI.Core.CoreWindow | Text: Windows 輸入體驗 | Visible: 1
+HWND: 0000000000070402 | Class: SkyDrive Class Name {090B42FF-7B26-4416-99B6-CB17896CF07C}-Personal | Text: OneDrive - 個人 | Visible: 0
+HWND: 000000000041045A | Class: crashpad_SessionEndWatcher | Text:  | Visible: 0
+HWND: 0000000000340408 | Class: ATL:00007FFA8ABED0D0 | Text:  | Visible: 0
+HWND: 0000000000220506 | Class: Nucleus Auth Window | Text: Microsoft OneDrive Sync Service | Visible: 0
+HWND: 000000000014050C | Class: ATL:00007FFA8ABED0D0 | Text:  | Visible: 0
+HWND: 00000000000600C4 | Class: Chrome_WidgetWin_0 | Text:  | Visible: 0
+HWND: 00000000000203A8 | Class: OleDdeWndClass | Text: DDE Server Window | Visible: 0
+HWND: 00000000000203A6 | Class: ContextSwitcherImpl | Text:  | Visible: 0
+HWND: 00000000000203A2 | Class: ATL:00007FFA8ABED0D0 | Text:  | Visible: 0
+HWND: 00000000002C052E | Class: ATL:00007FFA8ABED0D0 | Text:  | Visible: 0
+HWND: 00000000002006DC | Class: ATL:00007FFA8ABED0D0 | Text:  | Visible: 0
+HWND: 000000000005062E | Class: OneDriveReactNativeWin32WindowClass | Text:  | Visible: 0
+HWND: 000000000006041E | Class: ApplicationFrameWindow | Text: 設定 | Visible: 1
+HWND: 0000000000090044 | Class: Windows.UI.Core.CoreWindow | Text: DesktopWindowXamlSource | Visible: 0
+HWND: 00000000000500D6 | Class: Chrome_WidgetWin_1 | Text: 【存檔版】Google Antigravity 完全指南 | 掌握下一代「基於代理」IDE 的速查表 - Google Chrome | Visible: 1
+HWND: 0000000000010150 | Class: Progman | Text: Program Manager | Visible: 1
+HWND: 0000000000240594 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000101BA | Class: IME | Text: Default IME | Visible: 0
+HWND: 000000000002045E | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000010146 | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 0000000000010130 | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000010278 | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000230510 | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 0000000000F40430 | Class: IME | Text: Default IME | Visible: 0
+HWND: 000000000023094A | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000190A38 | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 0000000000260A08 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000007D0A8A | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 0000000000500ADA | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000850A4A | Class: IME | Text: Default IME | Visible: 0
+HWND: 000000000033065C | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 00000000001D0870 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000406D2 | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 0000000000010168 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000004A04AC | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 00000000000F05AE | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000001C0622 | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000290A22 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000001D00A8 | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000260462 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000F010E | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000220816 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000001703E2 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000001309D2 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000004E055C | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000010778 | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 0000000000100578 | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000010478 | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 0000000000020412 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000908B4 | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 00000000001A0756 | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000080AA8 | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000250824 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000002C0A92 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000003A0574 | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000100AA2 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000006A0540 | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 00000000003C07F0 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000408FC | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000E066E | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000107B8 | Class: IME | Text: Default IME | Visible: 0
+HWND: 000000000001079A | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000106EA | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000105FA | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000304D2 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000104F8 | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000030062 | Class: IME | Text: Default IME | Visible: 0
+HWND: 000000000001046E | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000020416 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000602D2 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000103C4 | Class: IME | Text: Default IME | Visible: 0
+HWND: 000000000001029C | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000010280 | Class: IME | Text: Default IME | Visible: 0
+HWND: 000000000001021A | Class: IME | Text: Default IME | Visible: 0
+HWND: 000000000001014C | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000060112 | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000010104 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000100FC | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 00000000000100EC | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000100E0 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000100BA | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000001A05A0 | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000240602 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000001207D6 | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000060538 | Class: IME | Text: Default IME | Visible: 0
+HWND: 000000000002037E | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000001605D8 | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000460454 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000000102DE | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000080118 | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 00000000002104BC | Class: IME | Text: Default IME | Visible: 0
+HWND: 000000000001053E | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 00000000000204F0 | Class: IME | Text: Default IME | Visible: 0
+HWND: 00000000003B02B0 | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 0000000000040074 | Class: IME | Text: Default IME | Visible: 0
+HWND: 0000000000020370 | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 00000000001B05DC | Class: IME | Text: Default IME | Visible: 0
+HWND: 000000000001016C | Class: MSCTFIME UI | Text: MSCTFIME UI | Visible: 0
+HWND: 00000000000100CA | Class: IME | Text: Default IME | Visible: 0

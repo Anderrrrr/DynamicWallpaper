@@ -28,8 +28,6 @@ if %ERRORLEVEL% equ 0 (
   echo.
   echo 編譯成功！
   echo 執行檔位置: build_msvc\Release\DynamicWallpaper.exe
-  echo.
-  DynamicWallpaper.exe
 ) else (
   echo.
   echo 編譯失敗！請檢查錯誤訊息。

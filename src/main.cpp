@@ -384,8 +384,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
         SetWindowPos(g_hwndDefView, HWND_TOP, 0, 0, screenWidth, screenHeight,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW);
 
-        // Near-black colorkey: any residual tint is barely visible
-        COLORREF keyColor = RGB(1, 0, 1);
+        // Magic pink colorkey
+        COLORREF keyColor = RGB(255, 0, 255);
 
         // Set SysListView32 BG + colorkey
         HWND hListView =

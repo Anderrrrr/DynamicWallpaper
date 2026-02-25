@@ -354,63 +354,42 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     MonitorInstance mon = {0};
     mon.rect = {0, 0, screenWidth, screenHeight};
 
-    // 24H2/25H2 approach (based on Lively Wallpaper fix):
-    // 1. Create a WS_POPUP window first (cross-process WS_CHILD fails)
-    // 2. SetParent into Progman
-    // 3. Add WS_EX_LAYERED + make fully opaque
-    // 4. Position between DefView (icons) and WorkerW (static wallpaper)
-    // This does NOT touch DefView at all — no icon glitches.
+    // Strategy: Standalone popup below everything + transparent desktop
+    // 1. Create popup at HWND_BOTTOM → video is visible
+    // 2. Clear the static wallpaper so Progman becomes transparent
+    // 3. Hide WorkerW so nothing paints over our video
+    // 4. Icons stay in DefView untouched → no glitches
 
-    HWND progman = FindWindow("Progman", nullptr);
-    if (!progman) {
-      LogMsg("ERROR: Progman not found for injection!");
-    }
-
-    mon.hwnd =
-        CreateWindowEx(0, CLASS_NAME, "Dynamic Wallpaper",
-                       WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0,
-                       screenWidth, screenHeight, NULL, NULL, hInstance, NULL);
+    mon.hwnd = CreateWindowEx(
+        WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME, "Dynamic Wallpaper",
+        WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0, screenWidth,
+        screenHeight, NULL, NULL, hInstance, NULL);
 
     if (mon.hwnd != NULL) {
-      LogMsg("Created popup window: " +
+      LogMsg("Created standalone popup: " +
              std::to_string((unsigned long long)mon.hwnd));
 
-      // Step 1: Inject into Progman's hierarchy
-      HWND oldParent = SetParent(mon.hwnd, progman);
-      LogMsg("SetParent to Progman. OldParent: " +
-             std::to_string((unsigned long long)oldParent));
+      // Position at HWND_BOTTOM — below everything including Progman
+      SetWindowPos(mon.hwnd, HWND_BOTTOM, 0, 0, screenWidth, screenHeight,
+                   SWP_NOACTIVATE | SWP_SHOWWINDOW);
+      LogMsg("Positioned at HWND_BOTTOM.");
 
-      // Step 2: Convert style to WS_CHILD
-      LONG style = GetWindowLong(mon.hwnd, GWL_STYLE);
-      style = (style & ~WS_POPUP) | WS_CHILD;
-      SetWindowLong(mon.hwnd, GWL_STYLE, style);
+      // Clear static wallpaper so Progman/WorkerW become transparent
+      SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, (PVOID)L"", 0);
+      LogMsg("Cleared static wallpaper via SPI_SETDESKWALLPAPER.");
 
-      // Step 3: Add WS_EX_LAYERED and make fully opaque
-      // This is the key to making it visible in 24H2/25H2's compositor
-      LONG exStyle = GetWindowLong(mon.hwnd, GWL_EXSTYLE);
-      SetWindowLong(mon.hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
-      SetLayeredWindowAttributes(mon.hwnd, 0, 255, LWA_ALPHA);
-      LogMsg("Applied WS_EX_LAYERED with full opacity.");
-
-      // Step 4: Position between DefView and WorkerW
-      // Z-order in Progman should be: DefView (top) > OUR WINDOW > WorkerW
-      // (bottom)
-      if (g_hwndDefView) {
-        // Place our window right after DefView (i.e., below icons)
-        SetWindowPos(mon.hwnd, g_hwndDefView, 0, 0, screenWidth, screenHeight,
-                     SWP_NOACTIVATE | SWP_SHOWWINDOW);
-        LogMsg("Positioned below DefView (icons stay on top).");
-      } else {
-        SetWindowPos(mon.hwnd, HWND_BOTTOM, 0, 0, screenWidth, screenHeight,
-                     SWP_NOACTIVATE | SWP_SHOWWINDOW);
-        LogMsg("No DefView found, positioned at HWND_BOTTOM.");
+      // Hide WorkerW so it doesn't paint a black/wallpaper layer over us
+      if (g_hwndWorkerW) {
+        ShowWindow(g_hwndWorkerW, SW_HIDE);
+        LogMsg("Hidden WorkerW.");
       }
 
-      // Push WorkerW behind our window
-      if (g_hwndWorkerW) {
-        SetWindowPos(g_hwndWorkerW, mon.hwnd, 0, 0, 0, 0,
-                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        LogMsg("Pushed WorkerW behind our video window.");
+      // Apply WS_CLIPCHILDREN to Progman so it doesn't paint over DefView
+      HWND progman = FindWindow("Progman", nullptr);
+      if (progman) {
+        LONG pStyle = GetWindowLong(progman, GWL_STYLE);
+        SetWindowLong(progman, GWL_STYLE, pStyle | WS_CLIPCHILDREN);
+        LogMsg("Applied WS_CLIPCHILDREN to Progman.");
       }
 
       mon.player = new VideoPlayer(mon.hwnd);

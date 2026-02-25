@@ -8584,3 +8584,54 @@ Set SysListView32 background to transparent.
 Initializing player for span mode
 OpenFile succeeded. Waiting for Topology Ready...
 Topology READY! Video is now PLAYING!
+--- Application Started ---
+Video Paths count: 1
+Video[0]: C:\Users\ander\Downloads\girl-standing-in-meadow.3840x2160.mp4
+Applied WS_CLIPCHILDREN to Progman.
+Applied WS_CLIPCHILDREN to WorkerW.
+Returning final target canvas.
+g_TargetBackground handle: 1638862
+TargetBackground Show/Update called.
+Span mode. Screen: 1920x1080
+Created popup window: 918546
+SetParent to Progman. OldParent: 65548
+Applied WS_EX_LAYERED with full opacity.
+No DefView found, positioned at HWND_BOTTOM.
+Pushed WorkerW behind our video window.
+Initializing player for span mode
+OpenFile succeeded. Waiting for Topology Ready...
+Topology READY! Video is now PLAYING!
+--- Application Started ---
+Video Paths count: 1
+Video[0]: C:\Users\ander\Downloads\girl-standing-in-meadow.3840x2160.mp4
+Applied WS_CLIPCHILDREN to Progman.
+Applied WS_CLIPCHILDREN to WorkerW.
+Returning final target canvas.
+g_TargetBackground handle: 590240
+TargetBackground Show/Update called.
+Span mode. Screen: 1920x1080
+Created popup window: 1050732
+SetParent to Progman. OldParent: 65548
+Applied WS_EX_LAYERED with full opacity.
+Positioned below DefView (icons stay on top).
+Pushed WorkerW behind our video window.
+Initializing player for span mode
+OpenFile succeeded. Waiting for Topology Ready...
+Topology READY! Video is now PLAYING!
+--- Application Started ---
+Video Paths count: 1
+Video[0]: C:\Users\ander\Downloads\girl-standing-in-meadow.3840x2160.mp4
+Applied WS_CLIPCHILDREN to Progman.
+Applied WS_CLIPCHILDREN to WorkerW.
+Returning final target canvas.
+g_TargetBackground handle: 590240
+TargetBackground Show/Update called.
+Span mode. Screen: 1920x1080
+Created popup window: 1116134
+SetParent to Progman. OldParent: 65548
+Applied WS_EX_LAYERED with full opacity.
+Positioned below DefView (icons stay on top).
+Pushed WorkerW behind our video window.
+Initializing player for span mode
+OpenFile succeeded. Waiting for Topology Ready...
+Topology READY! Video is now PLAYING!

@@ -84,3 +84,61 @@
 1. 打開「工作管理員」。
 2. 找到 `DynamicWallpaper.exe`。
 3. 點擊「結束工作」即可關閉桌布並恢復原始桌面。
+
+---
+
+## 診斷報告：Span 模式桌面圖示無法拖動
+
+### 問題描述
+在 Span 模式下，桌面圖示**可以顯示、可以點擊**，但**無法拖動或框選**。
+
+### 根本原因
+目前的 Span 模式使用 **DefView Reparenting + Colorkey** 方案：
+1. 建立一個獨立 Popup 視窗在 `HWND_BOTTOM` 播放影片
+2. 將 DefView（包含 SysListView32）從原本的父視窗**搬家** (`SetParent`) 到 Popup
+3. 在 SysListView32 上設定 `WS_EX_LAYERED` + `LWA_COLORKEY`（近黑色 `RGB(1,0,1)`）讓背景透明
+
+**問題出在第 3 步**：`LWA_COLORKEY` 會讓透明像素「穿透」滑鼠事件。SysListView32 的整個背景區域都是 colorkey 顏色，所以背景區域完全不接收滑鼠事件，導致拖動操作中斷。
+
+### 已嘗試的修復方案
+
+| # | 方案 | 影片 | 圖示 | 拖動 | 結論 |
+|---|------|------|------|------|------|
+| 1 | 原版 (popup + reparent + colorkey) | ✅ | ✅ | ❌ | 目前的方案，拖動是已知限制 |
+| 2 | `CLR_NONE` 背景 (取消 colorkey) | ✅ | ❌ 消失 | — | 完全不行，圖示消失 |
+| 3 | `GetAsyncKeyState` 動態切換透明 | ✅ | ✅ | ❌ 閃爍 | 切換 `WS_EX_LAYERED` 會觸發重繪閃爍 |
+| 4 | WorkerW 子窗口（傳統 Wallpaper Engine 做法） | ❌ 全黑 | ✅ | ✅ | 25H2 上 DefView 的不透明背景擋住影片 |
+| 5 | Progman 注入 (Lively Wallpaper 24H2/25H2 做法) | ❌ 全黑 | ✅ | ✅ | 同上，DefView 背景仍然不透明 |
+
+### 關鍵發現
+
+透過 debug log 確認了完整的 25H2 視窗層級結構：
+```
+Progman (handle)
+├── SHELLDLL_DefView     ← 桌面圖示層（繪製不透明桌布背景）
+├── DynamicWallpaper     ← 我們的影片（Z-order: DefView 後面）
+└── WorkerW              ← 空殼
+```
+
+**核心矛盾**：
+- DefView / SysListView32 會繪製**不透明的 Windows 桌布背景圖片**
+- 如果不加 colorkey → 背景圖完全遮住影片
+- 如果加 colorkey → 透明像素不接收滑鼠事件 → 無法拖動
+
+### 市場比較
+- **Wallpaper Engine**：使用傳統 WorkerW 子窗口方式，不碰 DefView，圖示完全正常。在 25H2 上也有圖示消失等 bug。
+- **Lively Wallpaper**：已發佈 24H2 相容更新，使用 `SetParent` 到 Progman + `WS_EX_LAYERED`(`LWA_ALPHA`) 的方式。
+
+---
+
+## TODO
+
+### 優先嘗試
+- [ ] **混合方案**：在 Progman 注入架構上（不 reparent DefView），只加 colorkey 到 SysListView32。因為 DefView 沒被搬家，mouse event routing 可能不同，拖動也許可行
+- [ ] **`WH_MOUSE_LL` 全局滑鼠 Hook**：攔截滑鼠事件，直接轉發給 SysListView32，完全不需要動 `WS_EX_LAYERED`，不會閃爍
+- [ ] **研究 Lively Wallpaper 原始碼**：他們已經在 24H2/25H2 上解決了這個問題 - [Lively GitHub](https://github.com/rocksdanister/lively)
+
+### 其他改善
+- [ ] Log 路徑改為可配置（目前硬編碼）
+- [ ] Monitors 模式在 25H2 上的測試與驗證
+- [ ] 退出時恢復 DefView 到原始父視窗

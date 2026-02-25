@@ -15,7 +15,7 @@
 #include <sstream>
 
 void LogMsg(const std::string &msg) {
-  std::ofstream out("C:\\DynamicWallpaperSource\\wallpaper_log.txt",
+  std::ofstream out("C:\\Users\\ander\\Dynamic_wallpaper\\debug_log.txt",
                     std::ios::app);
   out << msg << std::endl;
 }
@@ -362,70 +362,69 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   if (g_bSpanMode) {
     int screenWidth = GetSystemMetrics(SM_CXVIRTUALSCREEN);
     int screenHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+    int screenX = GetSystemMetrics(SM_XVIRTUALSCREEN);
+    int screenY = GetSystemMetrics(SM_YVIRTUALSCREEN);
     LogMsg("Span mode. Screen: " + std::to_string(screenWidth) + "x" +
            std::to_string(screenHeight));
 
     MonitorInstance mon = {0};
-    mon.rect = {0, 0, screenWidth, screenHeight};
+    mon.rect = {screenX, screenY, screenX + screenWidth, screenY + screenHeight};
 
-    // Strategy: Standalone popup + DefView reparenting + magic pink colorkey
-    // 1. Popup at HWND_BOTTOM → video visible
-    // 2. SetParent(DefView, ourPopup) → icons on top of video
-    // 3. SysListView32 uses magic pink as BG + WS_EX_LAYERED + LWA_COLORKEY
-    //    → DWM makes pink transparent → video shows through
-    //    → ListView can erase properly → no selection trails
+    HWND progman = FindWindow("Progman", nullptr);
+
+    // Strategy: Lively Wallpaper 24H2/25H2 workaround
+    // 1. Create popup with WS_EX_LAYERED + full opacity (for DWM compositing)
+    // 2. SetParent into Progman
+    // 3. Position just below DefView (icon layer stays on top, untouched)
+    // 4. Push WorkerW behind our window
+    // -> DefView never reparented -> icons fully interactive (click + drag)
 
     mon.hwnd = CreateWindowEx(
-        WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME, "Dynamic Wallpaper",
-        WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0, screenWidth,
-        screenHeight, NULL, NULL, hInstance, NULL);
+        WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+        CLASS_NAME, "Dynamic Wallpaper",
+        WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN,
+        screenX, screenY, screenWidth, screenHeight,
+        NULL, NULL, hInstance, NULL);
 
     if (mon.hwnd != NULL) {
-      LogMsg("Created standalone popup: " +
+      // Make fully opaque - WS_EX_LAYERED is only needed for DWM compositing
+      SetLayeredWindowAttributes(mon.hwnd, 0, 255, LWA_ALPHA);
+
+      LogMsg("Created layered popup: " +
              std::to_string((unsigned long long)mon.hwnd));
+      LogMsg("Progman: " + std::to_string((unsigned long long)progman));
+      LogMsg("DefView: " + std::to_string((unsigned long long)g_hwndDefView));
+      LogMsg("WorkerW: " + std::to_string((unsigned long long)g_hwndWorkerW));
 
-      // Position at HWND_BOTTOM
-      SetWindowPos(mon.hwnd, HWND_BOTTOM, 0, 0, screenWidth, screenHeight,
-                   SWP_NOACTIVATE | SWP_SHOWWINDOW);
-      LogMsg("Positioned at HWND_BOTTOM.");
+      // Step 2: Find DefView's actual parent - on 25H2 it may NOT be in Progman
+      HWND defViewParent = GetParent(g_hwndDefView);
+      LogMsg("DefView parent: " + std::to_string((unsigned long long)defViewParent));
 
-      // Reparent DefView into our popup so icons render on top of video
-      if (g_hwndDefView) {
-        HWND progman = FindWindow("Progman", nullptr);
-        HWND oldParent = SetParent(g_hwndDefView, mon.hwnd);
-        LogMsg("Reparented DefView. OldParent: " +
-               std::to_string((unsigned long long)oldParent));
+      // Reparent our video into the SAME parent as DefView (so they're siblings)
+      HWND targetParent = defViewParent ? defViewParent : progman;
+      HWND oldParent = SetParent(mon.hwnd, targetParent);
+      LogMsg("SetParent to: " + std::to_string((unsigned long long)targetParent) +
+             " OldParent: " + std::to_string((unsigned long long)oldParent));
 
-        SetWindowPos(g_hwndDefView, HWND_TOP, 0, 0, screenWidth, screenHeight,
-                     SWP_NOACTIVATE | SWP_SHOWWINDOW);
+      // After SetParent, reposition to cover the parent's client area
+      RECT rcParent;
+      GetClientRect(targetParent, &rcParent);
+      LogMsg("Parent client rect: " + std::to_string(rcParent.right) + "x" +
+             std::to_string(rcParent.bottom));
 
-        // Near-black colorkey: residual tint barely visible
-        COLORREF keyColor = RGB(1, 0, 1);
+      // Step 3: Position our window just below DefView (now they're siblings)
+      SetWindowPos(mon.hwnd, g_hwndDefView, 0, 0,
+                   rcParent.right, rcParent.bottom,
+                   SWP_NOACTIVATE);
+      LogMsg("Positioned just below DefView in Z-order.");
 
-        // Set SysListView32 BG + colorkey
-        HWND hListView =
-            FindWindowEx(g_hwndDefView, NULL, "SysListView32", NULL);
-        if (hListView) {
-          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)keyColor);
-          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)keyColor);
-
-          // Colorkey: DWM makes near-black pixels transparent
-          LONG lvExStyle = GetWindowLong(hListView, GWL_EXSTYLE);
-          SetWindowLong(hListView, GWL_EXSTYLE, lvExStyle | WS_EX_LAYERED);
-          SetLayeredWindowAttributes(hListView, keyColor, 0, LWA_COLORKEY);
-
-          RedrawWindow(hListView, NULL, NULL,
-                       RDW_ERASE | RDW_INVALIDATE | RDW_ALLCHILDREN);
-          LogMsg("Near-black colorkey on SysListView32.");
-        }
-
-        // Make Progman pass-through for mouse events (right-click etc.)
-        if (progman) {
-          LONG exStyle = GetWindowLong(progman, GWL_EXSTYLE);
-          SetWindowLong(progman, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT);
-          LogMsg("Set WS_EX_TRANSPARENT on Progman.");
-        }
-      }
+      // Verify final state
+      RECT rcFinal;
+      GetWindowRect(mon.hwnd, &rcFinal);
+      LogMsg("Video window final rect: " +
+             std::to_string(rcFinal.left) + "," + std::to_string(rcFinal.top) +
+             " - " + std::to_string(rcFinal.right) + "," + std::to_string(rcFinal.bottom));
+      LogMsg("IsWindowVisible: " + std::to_string(IsWindowVisible(mon.hwnd)));
 
       mon.player = new VideoPlayer(mon.hwnd);
       SetWindowLongPtr(mon.hwnd, GWLP_USERDATA, (LONG_PTR)mon.player);

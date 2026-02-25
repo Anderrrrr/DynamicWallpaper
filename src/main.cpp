@@ -384,25 +384,27 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
         SetWindowPos(g_hwndDefView, HWND_TOP, 0, 0, screenWidth, screenHeight,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW);
 
-        // Make SysListView32 background transparent + double-buffered
+        // Kill DefView's own background so it doesn't paint over video
+        SetClassLongPtr(g_hwndDefView, GCLP_HBRBACKGROUND,
+                        (LONG_PTR)GetStockObject(HOLLOW_BRUSH));
+
+        COLORREF magicPink = RGB(255, 0, 255);
+
+        // Set SysListView32 BG to magic pink + colorkey
         HWND hListView =
             FindWindowEx(g_hwndDefView, NULL, "SysListView32", NULL);
         if (hListView) {
-          // Transparent background so video shows through
-          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)CLR_NONE);
-          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)CLR_NONE);
+          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)magicPink);
+          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)magicPink);
 
-          // Enable double-buffering for clean icon rendering
-          DWORD lvExStyle =
-              (DWORD)SendMessage(hListView, LVM_GETEXTENDEDLISTVIEWSTYLE, 0, 0);
-          SendMessage(hListView, LVM_SETEXTENDEDLISTVIEWSTYLE, 0,
-                      (LPARAM)(lvExStyle | LVS_EX_DOUBLEBUFFER));
+          // Colorkey on SysListView32: DWM makes pink pixels transparent
+          LONG lvExStyle = GetWindowLong(hListView, GWL_EXSTYLE);
+          SetWindowLong(hListView, GWL_EXSTYLE, lvExStyle | WS_EX_LAYERED);
+          SetLayeredWindowAttributes(hListView, magicPink, 0, LWA_COLORKEY);
 
-          // Force complete repaint
           RedrawWindow(hListView, NULL, NULL,
-                       RDW_ERASE | RDW_INVALIDATE | RDW_FRAME |
-                           RDW_ALLCHILDREN);
-          LogMsg("Set SysListView32: CLR_NONE + LVS_EX_DOUBLEBUFFER.");
+                       RDW_ERASE | RDW_INVALIDATE | RDW_ALLCHILDREN);
+          LogMsg("Magic pink colorkey on ListView + hollow DefView BG.");
         }
       }
 

@@ -8738,3 +8738,35 @@ Positioned at HWND_BOTTOM.
 Initializing player for span mode
 OpenFile succeeded. Waiting for Topology Ready...
 Topology READY! Video is now PLAYING!
+--- Application Started ---
+Video Paths count: 1
+Video[0]: C:\Users\ander\Downloads\girl-standing-in-meadow.3840x2160.mp4
+Applied WS_CLIPCHILDREN to Progman.
+Applied WS_CLIPCHILDREN to WorkerW.
+Returning final target canvas.
+g_TargetBackground handle: 592236
+TargetBackground Show/Update called.
+Span mode. Screen: 1920x1080
+Created standalone popup: 1640762
+Positioned at HWND_BOTTOM.
+Reparented DefView. OldParent: 1640550
+Near-black colorkey on SysListView32.
+Initializing player for span mode
+OpenFile succeeded. Waiting for Topology Ready...
+Topology READY! Video is now PLAYING!
+--- Application Started ---
+Video Paths count: 1
+Video[0]: C:\Users\ander\Downloads\girl-standing-in-meadow.3840x2160.mp4
+Applied WS_CLIPCHILDREN to Progman.
+Applied WS_CLIPCHILDREN to WorkerW.
+Returning final target canvas.
+g_TargetBackground handle: 590916
+TargetBackground Show/Update called.
+Span mode. Screen: 1920x1080
+Created standalone popup: 264732
+Positioned at HWND_BOTTOM.
+Reparented DefView. OldParent: 787540
+Near-black colorkey on SysListView32.
+Initializing player for span mode
+OpenFile succeeded. Waiting for Topology Ready...
+Topology READY! Video is now PLAYING!

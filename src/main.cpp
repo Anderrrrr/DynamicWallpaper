@@ -384,28 +384,26 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
         SetWindowPos(g_hwndDefView, HWND_TOP, 0, 0, screenWidth, screenHeight,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW);
 
-        COLORREF magicPink = RGB(255, 0, 255);
-
-        // Set SysListView32 BG to magic pink (so it erases properly)
+        // Make SysListView32 background transparent + double-buffered
         HWND hListView =
             FindWindowEx(g_hwndDefView, NULL, "SysListView32", NULL);
         if (hListView) {
-          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)magicPink);
-          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)magicPink);
-          LogMsg("Set SysListView32 BG to magic pink.");
+          // Transparent background so video shows through
+          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)CLR_NONE);
+          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)CLR_NONE);
+
+          // Enable double-buffering for clean icon rendering
+          DWORD lvExStyle =
+              (DWORD)SendMessage(hListView, LVM_GETEXTENDEDLISTVIEWSTYLE, 0, 0);
+          SendMessage(hListView, LVM_SETEXTENDEDLISTVIEWSTYLE, 0,
+                      (LPARAM)(lvExStyle | LVS_EX_DOUBLEBUFFER));
+
+          // Force complete repaint
+          RedrawWindow(hListView, NULL, NULL,
+                       RDW_ERASE | RDW_INVALIDATE | RDW_FRAME |
+                           RDW_ALLCHILDREN);
+          LogMsg("Set SysListView32: CLR_NONE + LVS_EX_DOUBLEBUFFER.");
         }
-
-        // Apply colorkey to DefView (parent level) — DWM filters pink
-        // at the composition level, making the entire icon layer transparent
-        // where pink pixels exist
-        LONG dvExStyle = GetWindowLong(g_hwndDefView, GWL_EXSTYLE);
-        SetWindowLong(g_hwndDefView, GWL_EXSTYLE, dvExStyle | WS_EX_LAYERED);
-        SetLayeredWindowAttributes(g_hwndDefView, magicPink, 0, LWA_COLORKEY);
-
-        // Force full repaint
-        RedrawWindow(g_hwndDefView, NULL, NULL,
-                     RDW_ERASE | RDW_INVALIDATE | RDW_ALLCHILDREN);
-        LogMsg("Applied magic pink colorkey to DefView.");
       }
 
       mon.player = new VideoPlayer(mon.hwnd);

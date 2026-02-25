@@ -40,7 +40,6 @@ bool g_bSpanMode = true;
 
 #define WM_USER_PLAY (WM_USER + 1)
 #define WM_USER_PAUSE (WM_USER + 2)
-#define WM_USER_INIT_VIDEO (WM_USER + 3)
 
 // Callback to find the specific WorkerW that acts as the desktop background
 // layer
@@ -50,7 +49,6 @@ HWND g_hwndFallbackWorkerW = nullptr;
 BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
   HWND p = FindWindowEx(hwnd, NULL, "SHELLDLL_DefView", NULL);
   if (p != NULL) {
-    g_hwndDefView = p; // 儲存 DefView 序號，稍後用於 Z-Order 定位
     g_hwndWorkerW = FindWindowEx(NULL, hwnd, "WorkerW", NULL);
   }
   return TRUE;
@@ -58,60 +56,53 @@ BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
 
 HWND GetWallpaperWindow() {
   HWND progman = FindWindow("Progman", nullptr);
-  if (!progman) {
-    LogMsg("ERROR: Progman not found!");
-    return nullptr;
+  if (progman) {
+    // ?潮??潸翰???惜
+    SendMessageTimeout(progman, 0x052C, 0, 0, SMTO_NORMAL, 1000, nullptr);
+    Sleep(100); // 蝔凝蝑?銝銝?  }
+
+  HWND workerW = nullptr;
+  EnumWindows(
+      [](HWND hwnd, LPARAM lParam) -> BOOL {
+        HWND defView = FindWindowEx(hwnd, NULL, "SHELLDLL_DefView", NULL);
+        if (defView != NULL) {
+          HWND *target = (HWND *)lParam;
+          *target = FindWindowEx(NULL, hwnd, "WorkerW", NULL);
+          return FALSE;
+        }
+        return TRUE;
+      },
+      (LPARAM)&workerW);
+
+  if (workerW != nullptr) {
+    LogMsg("Successfully found the background WorkerW via DefView.");
+    ShowWindow(workerW, SW_SHOW); // ?儭?閫??嚗撥?園＊蝷箇撣?    return workerW;
   }
 
-  DWORD_PTR result = 0;
-  SendMessageTimeout(progman, 0x052C, 0, 0, SMTO_NORMAL, 1000, &result);
-  Sleep(500); // 延長等待時間，25H2 有時動作比較慢
-
-  g_hwndDefView = FindWindowEx(progman, NULL, "SHELLDLL_DefView", NULL);
-  if (!g_hwndDefView) {
-    EnumWindows(
-        [](HWND hwnd, LPARAM lParam) -> BOOL {
-          HWND p = FindWindowEx(hwnd, NULL, "SHELLDLL_DefView", NULL);
-          if (p != NULL) {
-            g_hwndDefView = p;
+  // ??寞?嚗??曄征??WorkerW
+  HWND fallbackWorker = nullptr;
+  EnumWindows(
+      [](HWND hwnd, LPARAM lParam) -> BOOL {
+        char cls[256];
+        GetClassNameA(hwnd, cls, sizeof(cls));
+        if (std::string(cls) == "WorkerW") {
+          if (FindWindowEx(hwnd, NULL, NULL, NULL) == NULL) {
+            HWND *target = (HWND *)lParam;
+            *target = hwnd;
             return FALSE;
           }
-          return TRUE;
-        },
-        0);
+        }
+        return TRUE;
+      },
+      (LPARAM)&fallbackWorker);
+
+  if (fallbackWorker != nullptr) {
+    LogMsg("Found fallback WorkerW (empty layer).");
+    ShowWindow(fallbackWorker, SW_SHOW); // ?儭?閫??嚗撥?園＊蝷箇撣?    return fallbackWorker;
   }
 
-  HWND workerW = FindWindowEx(progman, NULL, "WorkerW", NULL);
-  if (!workerW) {
-    EnumWindows(
-        [](HWND hwnd, LPARAM lParam) -> BOOL {
-          char className[256];
-          GetClassNameA(hwnd, className, sizeof(className));
-          if (strcmp(className, "WorkerW") == 0 &&
-              GetWindow(hwnd, GW_CHILD) == NULL) {
-            *(HWND *)lParam = hwnd;
-            return FALSE;
-          }
-          return TRUE;
-        },
-        (LPARAM)&workerW);
-  }
-  g_hwndWorkerW = workerW;
-
-  HWND target = workerW ? workerW : progman;
-
-  LONG pStyle = GetWindowLong(progman, GWL_STYLE);
-  SetWindowLong(progman, GWL_STYLE, pStyle | WS_CLIPCHILDREN);
-  LogMsg("Applied WS_CLIPCHILDREN to Progman.");
-
-  if (target && target != progman) {
-    LONG tStyle = GetWindowLong(target, GWL_STYLE);
-    SetWindowLong(target, GWL_STYLE, tStyle | WS_CLIPCHILDREN);
-    LogMsg("Applied WS_CLIPCHILDREN to WorkerW.");
-  }
-
-  LogMsg("Returning final target canvas.");
-  return target;
+  LogMsg("Fallback: using Progman directly");
+  return progman;
 }
 
 bool IsFullscreenAppRunning() {
@@ -164,23 +155,6 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam,
   }
 
   switch (uMsg) {
-  case WM_USER_INIT_VIDEO:
-    if (player) {
-      if (!g_VideoPaths.empty()) {
-        HRESULT hrOpen = player->OpenFile(g_VideoPaths[0]);
-        if (SUCCEEDED(hrOpen)) {
-          LogMsg("OpenFile succeeded. Waiting for Topology Ready...");
-        } else {
-          LogMsg("OpenFile failed: 0x" + [&]() {
-            std::ostringstream ss;
-            ss << std::hex << hrOpen;
-            return ss.str();
-          }());
-        }
-      }
-    }
-    return 0;
-
   case WM_USER_PLAY:
     if (player && !player->IsPlaying()) {
       player->Play();
@@ -196,18 +170,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam,
       player->ResizeVideo(LOWORD(lParam), HIWORD(lParam));
     }
     return 0;
-
-  case WM_ERASEBKGND: {
-    HDC hdc = (HDC)wParam;
-    RECT rc;
-    GetClientRect(hwnd, &rc);
-    FillRect(hdc, &rc, (HBRUSH)GetStockObject(BLACK_BRUSH));
-    return 1; // 告訴 Windows 我們已經把背景塗黑了，不要再閃白光
-  }
-  case WM_DESTROY: {
+  case WM_DESTROY:
     PostQuitMessage(0);
     return 0;
-  }
   }
   return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
@@ -220,8 +185,8 @@ BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor,
   MapWindowPoints(NULL, g_TargetBackground, (LPPOINT)&rc, 2);
   int width = rc.right - rc.left;
   int height = rc.bottom - rc.top;
-  int x = rc.left; // 轉換過後的相對 X
-  int y = rc.top;  // 轉換過後的相對 Y
+  int x = rc.left; // 頧????撠?X
+  int y = rc.top;  // 頧????撠?Y
 
   size_t monitorIndex = g_Monitors.size();
 
@@ -234,31 +199,26 @@ BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor,
   MonitorInstance mon = {0};
   mon.rect = rc;
 
-  // Create window for this monitor  // Calculate relative coordinates for
-  // child window if necessary
+  // Create window for this monitor  // Calculate relative coordinates for child
+  // window if necessary
 
-  mon.hwnd = CreateWindowEx(
-      0, CLASS_NAME, "Dynamic Wallpaper",
-      WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, x, y, width,
-      height, g_TargetBackground, NULL, g_hInstance, NULL);
+  mon.hwnd = CreateWindowEx(0, CLASS_NAME, "Dynamic Wallpaper",
+                            WS_CHILD | WS_VISIBLE, x, y, width, height,
+                            g_TargetBackground, NULL, g_hInstance, NULL);
 
   if (mon.hwnd != NULL) {
-    if (g_TargetBackground == FindWindow("Progman", nullptr) && g_hwndDefView) {
-      SetWindowPos(mon.hwnd, g_hwndDefView, 0, 0, 0, 0,
-                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    }
+    // Manually force it to be inside the selected layer
+    SetParent(mon.hwnd, g_TargetBackground);
 
+    SetWindowPos(mon.hwnd, HWND_BOTTOM, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     mon.player = new VideoPlayer(mon.hwnd);
     SetWindowLongPtr(mon.hwnd, GWLP_USERDATA, (LONG_PTR)mon.player);
 
     if (SUCCEEDED(mon.player->Initialize())) {
-      PostMessage(mon.hwnd, WM_USER_INIT_VIDEO, 0, 0);
-
-      if (g_hwndDefView) {
-        ShowWindow(g_hwndDefView, SW_HIDE);
-        Sleep(20);
-        ShowWindow(g_hwndDefView, SW_SHOWNORMAL);
-        LogMsg("DefView refreshed to clear snapshot.");
+      if (SUCCEEDED(mon.player->OpenFile(videoPath))) {
+        mon.player->ResizeVideo(width, height);
+        mon.player->Play();
       }
     }
 
@@ -309,8 +269,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   SetProcessDPIAware();
 
   g_hInstance = hInstance;
-  // USER INSTRUCTION 1: EVR requires STA (Apartment) threading model.
-  HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+  HRESULT hr = CoInitializeEx(NULL, COINIT_MULTITHREADED);
   if (FAILED(hr))
     return -1;
 
@@ -325,18 +284,22 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
 
   g_TargetBackground = GetWallpaperWindow();
   if (!g_TargetBackground) {
+    // If GetWallpaperWindow returns NULL, we try to use Progman as a fallback
+    // for SetParent. This is for cases where WorkerW isn't found or DefView is
+    // used.
+    g_TargetBackground = FindWindow("Progman", nullptr);
+    if (!g_TargetBackground) {
+      LogMsg("Failed to find Progman as a fallback target.");
+      MessageBoxA(NULL, "Failed to find desktop background window.", "Error",
+                  MB_OK);
+      CoUninitialize();
+      return -1;
+    }
     LogMsg(
-        "GetWallpaperWindow returned NULL. Failed locating background HWND.");
+        "GetWallpaperWindow returned NULL. Using Progman as fallback target.");
   }
   LogMsg("g_TargetBackground handle: " +
          std::to_string((unsigned long long)g_TargetBackground));
-
-  // 確保背景視窗可見與重繪，讓 EVR 得以渲染
-  if (g_TargetBackground) {
-    ShowWindow(g_TargetBackground, SW_SHOW);
-    UpdateWindow(g_TargetBackground);
-    LogMsg("TargetBackground Show/Update called.");
-  }
 
   WNDCLASS wc = {};
   wc.lpfnWndProc = WindowProc;
@@ -346,70 +309,44 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   RegisterClass(&wc);
 
   if (g_bSpanMode) {
-    int screenWidth = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYVIRTUALSCREEN);
-    LogMsg("Span mode. Screen: " + std::to_string(screenWidth) + "x" +
-           std::to_string(screenHeight));
+    RECT parentRect;
+    GetClientRect(g_TargetBackground, &parentRect);
+    int clientWidth = parentRect.right - parentRect.left;
+    int clientHeight = parentRect.bottom - parentRect.top;
 
     MonitorInstance mon = {0};
-    mon.rect = {0, 0, screenWidth, screenHeight};
-
-    // 25H2: Create a standalone popup window (NOT parented to Progman).
-    // DWM on 25H2 ignores child window rendering inside Progman.
+    mon.rect = parentRect;
     mon.hwnd = CreateWindowEx(
-        WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME, "Dynamic Wallpaper",
-        WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, 0, 0,
-        screenWidth, screenHeight, NULL, NULL, hInstance, NULL);
+        0, CLASS_NAME, "Dynamic Wallpaper", WS_CHILD | WS_VISIBLE, 0, 0,
+        clientWidth, clientHeight, g_TargetBackground, NULL, hInstance, NULL);
 
     if (mon.hwnd != NULL) {
-      LogMsg("Created standalone popup: " +
-             std::to_string((unsigned long long)mon.hwnd));
+      // Manually force it to be inside the selected layer
+      SetParent(mon.hwnd, g_TargetBackground);
 
-      // Position at HWND_BOTTOM so it's below everything
-      SetWindowPos(mon.hwnd, HWND_BOTTOM, 0, 0, screenWidth, screenHeight,
-                   SWP_NOACTIVATE | SWP_SHOWWINDOW);
-      LogMsg("Positioned at HWND_BOTTOM.");
-
-      // Reparent DefView (desktop icons) into our video window
-      // so icons render directly on top of the video
-      if (g_hwndDefView) {
-        HWND oldParent = SetParent(g_hwndDefView, mon.hwnd);
-        LogMsg("Reparented DefView into our video window. OldParent: " +
-               std::to_string((unsigned long long)oldParent));
-
-        // Position DefView to fill our entire window
-        SetWindowPos(g_hwndDefView, HWND_TOP, 0, 0, screenWidth, screenHeight,
-                     SWP_NOACTIVATE | SWP_SHOWWINDOW);
-
-        // Make SysListView32 background transparent so icons don't show
-        // the cached static wallpaper snapshot behind them
-        HWND hListView =
-            FindWindowEx(g_hwndDefView, NULL, "SysListView32", NULL);
-        if (hListView) {
-          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)CLR_NONE);
-          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)CLR_NONE);
-          InvalidateRect(hListView, NULL, TRUE);
-          LogMsg("Set SysListView32 background to transparent.");
-        }
-      }
-
+      SetWindowPos(mon.hwnd, HWND_BOTTOM, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
       mon.player = new VideoPlayer(mon.hwnd);
       SetWindowLongPtr(mon.hwnd, GWLP_USERDATA, (LONG_PTR)mon.player);
 
       LogMsg("Initializing player for span mode");
       HRESULT hrInit = mon.player->Initialize();
       if (SUCCEEDED(hrInit)) {
-        PostMessage(mon.hwnd, WM_USER_INIT_VIDEO, 0, 0);
+        HRESULT hrOpen = mon.player->OpenFile(g_VideoPaths[0]);
+        if (SUCCEEDED(hrOpen)) {
+          LogMsg("OpenFile succeeded");
+          mon.player->ResizeVideo(clientWidth, clientHeight);
+          mon.player->Play();
+        } else {
+          LogMsg("OpenFile failed: " + std::to_string(hrOpen));
+        }
       } else {
         LogMsg("Initialize failed: " + std::to_string(hrInit));
       }
       g_Monitors.push_back(mon);
-    } else {
-      LogMsg("ERROR: CreateWindowEx failed! Error code: " +
-             std::to_string(GetLastError()));
     }
   } else {
-    // 復原原本的多螢幕模式邏輯
+    // Enumerate physical monitors and spawn independent windows
     EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, 0);
   }
 
@@ -420,8 +357,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   }
 
   // Start background thread for auto-pause magic
-  // USER INSTRUCTION 2: Comment out monitorThread to prevent early pause
-  // logic std::thread monitorThread(MonitorThread);
+  std::thread monitorThread(MonitorThread);
 
   // Standard message loop
   MSG msg = {};
@@ -432,17 +368,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
 
   // Cleanup
   g_bRunning = false;
-  // monitorThread.join();
-
-  // Restore DefView back to Progman before exiting
-  if (g_hwndDefView) {
-    HWND progman = FindWindow("Progman", nullptr);
-    if (progman) {
-      SetParent(g_hwndDefView, progman);
-      ShowWindow(g_hwndDefView, SW_SHOWNORMAL);
-      LogMsg("Restored DefView back to Progman.");
-    }
-  }
+  monitorThread.join();
 
   for (auto &mon : g_Monitors) {
     if (mon.player) {

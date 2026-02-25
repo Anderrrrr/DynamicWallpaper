@@ -1,0 +1,55 @@
+Microsoft (R) C/C++ Optimizing Compiler Version 19.44.35217 for x64
+Copyright (C) Microsoft Corporation.  著作權所有，並保留一切權利。
+
+main.cpp
+..\..\src\main.cpp(1): warning C4819: 檔案含有無法在目前字碼頁 (950) 中表示的字元。請以 Unicode 格式儲存檔案以防止資料遺失
+C:\DynamicWallpaperSource\src\VideoPlayer.h(1): warning C4819: 檔案含有無法在目前字碼頁 (950) 中表示的字元。請以 Unicode 格式儲存檔案以防止資料遺失
+..\..\src\main.cpp(208): warning C4244: '引數': 將 'LONG' 轉換為 'WORD'，由於類型不同，可能導致資料遺失
+..\..\src\main.cpp(208): warning C4244: '引數': 將 'LONG' 轉換為 'WORD'，由於類型不同，可能導致資料遺失
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\xutility(4813): warning C4244: '=': 將 'wchar_t' 轉換為 'char'，由於類型不同，可能導致資料遺失
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\xutility(4813): note: 範本具現化內容 (首先是最舊的) 是
+..\..\src\main.cpp(353): note: 請參考正在進行編譯的函式 樣板 具現化 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string<std::_String_iterator<std::_String_val<std::_Simple_types<_Elem>>>,0>(_Iter,_Iter,const _Alloc &)'
+        with
+        [
+            _Elem=wchar_t,
+            _Iter=std::_String_iterator<std::_String_val<std::_Simple_types<wchar_t>>>,
+            _Alloc=std::allocator<char>
+        ]
+..\..\src\main.cpp(353): note: 請參閱 'WinMain' 中 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string' 的第一個參考
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\xstring(812): note: 請參考正在進行編譯的函式 樣板 具現化 'void std::basic_string<char,std::char_traits<char>,std::allocator<char>>::_Construct_from_iter<wchar_t*,wchar_t*,_Size_type>(_Iter,const _Sent,_Size)'
+        with
+        [
+            _Size_type=unsigned __int64,
+            _Iter=wchar_t *,
+            _Sent=wchar_t *,
+            _Size=unsigned __int64
+        ]
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\xstring(968): note: 請參考正在進行編譯的函式 樣板 具現化 '_OutIt *std::_Copy_n_unchecked4<wchar_t*,_Size,char*>(_InIt,_SizeTy,_OutIt)'
+        with
+        [
+            _OutIt=char *,
+            _Size=unsigned __int64,
+            _InIt=wchar_t *,
+            _SizeTy=unsigned __int64
+        ]
+VideoPlayer.cpp
+..\..\src\VideoPlayer.cpp(1): warning C4819: 檔案含有無法在目前字碼頁 (950) 中表示的字元。請以 Unicode 格式儲存檔案以防止資料遺失
+C:\DynamicWallpaperSource\src\VideoPlayer.h(1): warning C4819: 檔案含有無法在目前字碼頁 (950) 中表示的字元。請以 Unicode 格式儲存檔案以防止資料遺失
+正在產生程式碼...
+Microsoft (R) Incremental Linker Version 14.44.35217.0
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+/out:DW_new.exe 
+main.obj 
+VideoPlayer.obj 
+user32.lib 
+shell32.lib 
+mf.lib 
+mfplat.lib 
+mfuuid.lib 
+shlwapi.lib 
+ole32.lib 
+gdi32.lib 
+strmiids.lib 
+evr.lib 
+BUILD_EXIT=0

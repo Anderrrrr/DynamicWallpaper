@@ -1,0 +1,26 @@
+Microsoft (R) C/C++ Optimizing Compiler Version 19.44.35217 for x64
+Copyright (C) Microsoft Corporation.  著作權所有，並保留一切權利。
+
+main.cpp
+..\..\src\main.cpp(1): warning C4819: 檔案含有無法在目前字碼頁 (950) 中表示的字元。請以 Unicode 格式儲存檔案以防止資料遺失
+C:\DynamicWallpaperSource\src\VideoPlayer.h(1): warning C4819: 檔案含有無法在目前字碼頁 (950) 中表示的字元。請以 Unicode 格式儲存檔案以防止資料遺失
+..\..\src\main.cpp(78): error C2601: 'IsFullscreenAppRunning': 區域函式定義不合法
+..\..\src\main.cpp(59): note: 此行包含沒有相對應符號的 '{'
+..\..\src\main.cpp(101): error C2601: 'MonitorThread': 區域函式定義不合法
+..\..\src\main.cpp(59): note: 此行包含沒有相對應符號的 '{'
+..\..\src\main.cpp(116): error C2601: 'WindowProc': 區域函式定義不合法
+..\..\src\main.cpp(59): note: 此行包含沒有相對應符號的 '{'
+..\..\src\main.cpp(177): error C2601: 'MonitorEnumProc': 區域函式定義不合法
+..\..\src\main.cpp(59): note: 此行包含沒有相對應符號的 '{'
+..\..\src\main.cpp(230): error C2601: 'ParseCommandLine': 區域函式定義不合法
+..\..\src\main.cpp(59): note: 此行包含沒有相對應符號的 '{'
+..\..\src\main.cpp(264): error C2601: 'WinMain': 區域函式定義不合法
+..\..\src\main.cpp(59): note: 此行包含沒有相對應符號的 '{'
+..\..\src\main.cpp(59): fatal error C1075: '{': 找不到任何相符的語彙基元
+VideoPlayer.cpp
+..\..\src\VideoPlayer.cpp(1): warning C4819: 檔案含有無法在目前字碼頁 (950) 中表示的字元。請以 Unicode 格式儲存檔案以防止資料遺失
+C:\DynamicWallpaperSource\src\VideoPlayer.h(1): warning C4819: 檔案含有無法在目前字碼頁 (950) 中表示的字元。請以 Unicode 格式儲存檔案以防止資料遺失
+..\..\src\VideoPlayer.cpp(93): warning C4244: '引數': 將 'LONG' 轉換為 'WORD'，由於類型不同，可能導致資料遺失
+..\..\src\VideoPlayer.cpp(93): warning C4244: '引數': 將 'LONG' 轉換為 'WORD'，由於類型不同，可能導致資料遺失
+正在產生程式碼...
+BUILD_EXIT=2

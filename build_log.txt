@@ -1,0 +1,64 @@
+å°‹æ‰¾ Visual Studio ç·¨è­¯?°å?...
+?å??¾åˆ° VS å®‰è?è·¯å?: C:\Program Files\Microsoft Visual Studio\2022\Community
+æ­?œ¨è¨­å?ç·¨è­¯?°å?...
+**********************************************************************
+** Visual Studio 2022 Developer Command Prompt v17.14.16
+** Copyright (c) 2025 Microsoft Corporation
+**********************************************************************
+[vcvarsall.bat] Environment initialized for: 'x64'
+æ­?œ¨ç·¨è­¯ C++ ?Ÿå?ç¢?..
+Microsoft (R) C/C++ Optimizing Compiler Version 19.44.35217 for x64
+Copyright (C) Microsoft Corporation.  µÛ§@Åv©Ò¦³¡A¨Ã«O¯d¤@¤ÁÅv§Q¡C
+
+main.cpp
+..\..\src\main.cpp(1): warning C4819: ÀÉ®×§t¦³µLªk¦b¥Ø«e¦r½X­¶ (950) ¤¤ªí¥Üªº¦r¤¸¡C½Ğ¥H Unicode ®æ¦¡Àx¦sÀÉ®×¥H¨¾¤î¸ê®Æ¿ò¥¢
+..\..\src\main.cpp(190): warning C4244: '¤Ş¼Æ': ±N 'LONG' Âà´«¬° 'WORD'¡A¥Ñ©óÃş«¬¤£¦P¡A¥i¯à¾É­P¸ê®Æ¿ò¥¢
+..\..\src\main.cpp(190): warning C4244: '¤Ş¼Æ': ±N 'LONG' Âà´«¬° 'WORD'¡A¥Ñ©óÃş«¬¤£¦P¡A¥i¯à¾É­P¸ê®Æ¿ò¥¢
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\xutility(4813): warning C4244: '=': ±N 'wchar_t' Âà´«¬° 'char'¡A¥Ñ©óÃş«¬¤£¦P¡A¥i¯à¾É­P¸ê®Æ¿ò¥¢
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\xutility(4813): note: ½d¥»¨ã²{¤Æ¤º®e (­º¥ı¬O³ÌÂÂªº) ¬O
+..\..\src\main.cpp(334): note: ½Ğ°Ñ¦Ò¥¿¦b¶i¦æ½sÄ¶ªº¨ç¦¡ ¼ËªO ¨ã²{¤Æ 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string<std::_String_iterator<std::_String_val<std::_Simple_types<_Elem>>>,0>(_Iter,_Iter,const _Alloc &)'
+        with
+        [
+            _Elem=wchar_t,
+            _Iter=std::_String_iterator<std::_String_val<std::_Simple_types<wchar_t>>>,
+            _Alloc=std::allocator<char>
+        ]
+..\..\src\main.cpp(334): note: ½Ğ°Ñ¾\ 'WinMain' ¤¤ 'std::basic_string<char,std::char_traits<char>,std::allocator<char>>::basic_string' ªº²Ä¤@­Ó°Ñ¦Ò
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\xstring(812): note: ½Ğ°Ñ¦Ò¥¿¦b¶i¦æ½sÄ¶ªº¨ç¦¡ ¼ËªO ¨ã²{¤Æ 'void std::basic_string<char,std::char_traits<char>,std::allocator<char>>::_Construct_from_iter<wchar_t*,wchar_t*,_Size_type>(_Iter,const _Sent,_Size)'
+        with
+        [
+            _Size_type=unsigned __int64,
+            _Iter=wchar_t *,
+            _Sent=wchar_t *,
+            _Size=unsigned __int64
+        ]
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.44.35207\include\xstring(968): note: ½Ğ°Ñ¦Ò¥¿¦b¶i¦æ½sÄ¶ªº¨ç¦¡ ¼ËªO ¨ã²{¤Æ '_OutIt *std::_Copy_n_unchecked4<wchar_t*,_Size,char*>(_InIt,_SizeTy,_OutIt)'
+        with
+        [
+            _OutIt=char *,
+            _Size=unsigned __int64,
+            _InIt=wchar_t *,
+            _SizeTy=unsigned __int64
+        ]
+VideoPlayer.cpp
+¥¿¦b²£¥Íµ{¦¡½X...
+Microsoft (R) Incremental Linker Version 14.44.35217.0
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+/out:DynamicWallpaper.exe 
+main.obj 
+VideoPlayer.obj 
+user32.lib 
+shell32.lib 
+mf.lib 
+mfplat.lib 
+mfuuid.lib 
+shlwapi.lib 
+ole32.lib 
+gdi32.lib 
+strmiids.lib 
+evr.lib 
+
+ç·¨è­¯?å?ï¼?
+'Ÿ·è¡Œæ?ä½ç½®:' ¤£¬O¤º³¡©Î¥~³¡©R¥O¡B¥i°õ¦æªºµ{¦¡©Î§å¦¸ÀÉ¡C
+

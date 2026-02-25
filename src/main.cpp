@@ -122,8 +122,24 @@ bool IsFullscreenAppRunning() {
   char className[256] = {0};
   GetClassNameA(hwnd, className, sizeof(className));
 
-  // Ignore desktop foreground windows
-  if (strcmp(className, "WorkerW") == 0 || strcmp(className, "Progman") == 0)
+  // Ignore desktop and system shell windows
+  if (hwnd == GetDesktopWindow() || hwnd == GetShellWindow())
+    return false;
+
+  if (strcmp(className, "WorkerW") == 0 || strcmp(className, "Progman") == 0 ||
+      strcmp(className, "Shell_TrayWnd") == 0 ||
+      strcmp(className, "Shell_SecondaryTrayWnd") == 0 ||
+      strcmp(className, "Windows.UI.Core.CoreWindow") == 0) {
+    return false;
+  }
+
+  // Must be visible
+  if (!IsWindowVisible(hwnd))
+    return false;
+
+  // Ignore tool windows
+  LONG exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+  if (exStyle & WS_EX_TOOLWINDOW)
     return false;
 
   RECT rc;
@@ -360,9 +376,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     //    → ListView can erase properly → no selection trails
 
     mon.hwnd = CreateWindowEx(
-        WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT, CLASS_NAME,
-        "Dynamic Wallpaper", WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0,
-        screenWidth, screenHeight, NULL, NULL, hInstance, NULL);
+        WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME, "Dynamic Wallpaper",
+        WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0, screenWidth,
+        screenHeight, NULL, NULL, hInstance, NULL);
 
     if (mon.hwnd != NULL) {
       LogMsg("Created standalone popup: " +

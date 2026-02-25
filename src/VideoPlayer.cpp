@@ -72,8 +72,10 @@ HRESULT VideoPlayer::HandleEvent(IMFMediaEvent *pEvent) {
   if (FAILED(hr))
     return hr;
 
-  if (meType == MESessionEnded) {
-    // Seamless loop: Seek back to start and play
+  if (meType == MEEndOfPresentation || meType == MESessionEnded) {
+    // Seamless loop: Seek back to start before EVR clears its surface
+    // MEEndOfPresentation fires earlier than MESessionEnded,
+    // allowing us to restart before the swap chain is cleared
     PROPVARIANT varStart;
     PropVariantInit(&varStart);
     varStart.vt = VT_I8;

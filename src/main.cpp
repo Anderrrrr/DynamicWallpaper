@@ -384,24 +384,16 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
         SetWindowPos(g_hwndDefView, HWND_TOP, 0, 0, screenWidth, screenHeight,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW);
 
-        // Near-black colorkey: residual tint barely visible
-        COLORREF keyColor = RGB(1, 0, 1);
-
-        // Set SysListView32 BG + colorkey
+        // Transparent background — no WS_EX_LAYERED to preserve selection
         HWND hListView =
             FindWindowEx(g_hwndDefView, NULL, "SysListView32", NULL);
         if (hListView) {
-          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)keyColor);
-          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)keyColor);
-
-          // Colorkey: DWM makes near-black pixels transparent
-          LONG lvExStyle = GetWindowLong(hListView, GWL_EXSTYLE);
-          SetWindowLong(hListView, GWL_EXSTYLE, lvExStyle | WS_EX_LAYERED);
-          SetLayeredWindowAttributes(hListView, keyColor, 0, LWA_COLORKEY);
+          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)CLR_NONE);
+          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)CLR_NONE);
 
           RedrawWindow(hListView, NULL, NULL,
                        RDW_ERASE | RDW_INVALIDATE | RDW_ALLCHILDREN);
-          LogMsg("Near-black colorkey on SysListView32.");
+          LogMsg("CLR_NONE on SysListView32 (no WS_EX_LAYERED).");
         }
       }
 

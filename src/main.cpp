@@ -354,11 +354,12 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     MonitorInstance mon = {0};
     mon.rect = {0, 0, screenWidth, screenHeight};
 
-    // Strategy: Standalone popup below everything + transparent desktop
-    // 1. Create popup at HWND_BOTTOM → video is visible
-    // 2. Clear the static wallpaper so Progman becomes transparent
-    // 3. Hide WorkerW so nothing paints over our video
-    // 4. Icons stay in DefView untouched → no glitches
+    // Strategy: Standalone popup + DefView reparenting + magic pink colorkey
+    // 1. Popup at HWND_BOTTOM → video visible
+    // 2. SetParent(DefView, ourPopup) → icons on top of video
+    // 3. SysListView32 uses magic pink as BG + WS_EX_LAYERED + LWA_COLORKEY
+    //    → DWM makes pink transparent → video shows through
+    //    → ListView can erase properly → no selection trails
 
     mon.hwnd = CreateWindowEx(
         WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME, "Dynamic Wallpaper",
@@ -369,27 +370,40 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
       LogMsg("Created standalone popup: " +
              std::to_string((unsigned long long)mon.hwnd));
 
-      // Position at HWND_BOTTOM — below everything including Progman
+      // Position at HWND_BOTTOM
       SetWindowPos(mon.hwnd, HWND_BOTTOM, 0, 0, screenWidth, screenHeight,
                    SWP_NOACTIVATE | SWP_SHOWWINDOW);
       LogMsg("Positioned at HWND_BOTTOM.");
 
-      // Clear static wallpaper so Progman/WorkerW become transparent
-      SystemParametersInfo(SPI_SETDESKWALLPAPER, 0, (PVOID)L"", 0);
-      LogMsg("Cleared static wallpaper via SPI_SETDESKWALLPAPER.");
+      // Reparent DefView into our popup so icons render on top of video
+      if (g_hwndDefView) {
+        HWND oldParent = SetParent(g_hwndDefView, mon.hwnd);
+        LogMsg("Reparented DefView. OldParent: " +
+               std::to_string((unsigned long long)oldParent));
 
-      // Hide WorkerW so it doesn't paint a black/wallpaper layer over us
-      if (g_hwndWorkerW) {
-        ShowWindow(g_hwndWorkerW, SW_HIDE);
-        LogMsg("Hidden WorkerW.");
-      }
+        SetWindowPos(g_hwndDefView, HWND_TOP, 0, 0, screenWidth, screenHeight,
+                     SWP_NOACTIVATE | SWP_SHOWWINDOW);
 
-      // Apply WS_CLIPCHILDREN to Progman so it doesn't paint over DefView
-      HWND progman = FindWindow("Progman", nullptr);
-      if (progman) {
-        LONG pStyle = GetWindowLong(progman, GWL_STYLE);
-        SetWindowLong(progman, GWL_STYLE, pStyle | WS_CLIPCHILDREN);
-        LogMsg("Applied WS_CLIPCHILDREN to Progman.");
+        // Magic pink colorkey fix for SysListView32
+        HWND hListView =
+            FindWindowEx(g_hwndDefView, NULL, "SysListView32", NULL);
+        if (hListView) {
+          COLORREF magicPink = RGB(255, 0, 255);
+
+          // Set ListView BG to magic pink (so it can erase properly)
+          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)magicPink);
+          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)magicPink);
+
+          // Make magic pink transparent via DWM layered window
+          LONG lvExStyle = GetWindowLong(hListView, GWL_EXSTYLE);
+          SetWindowLong(hListView, GWL_EXSTYLE, lvExStyle | WS_EX_LAYERED);
+          SetLayeredWindowAttributes(hListView, magicPink, 0, LWA_COLORKEY);
+
+          // Force full repaint
+          RedrawWindow(hListView, NULL, NULL,
+                       RDW_ERASE | RDW_INVALIDATE | RDW_ALLCHILDREN);
+          LogMsg("Applied magic pink colorkey to SysListView32.");
+        }
       }
 
       mon.player = new VideoPlayer(mon.hwnd);

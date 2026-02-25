@@ -198,11 +198,9 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam,
     return 0;
 
   case WM_ERASEBKGND: {
-    HDC hdc = (HDC)wParam;
-    RECT rc;
-    GetClientRect(hwnd, &rc);
-    FillRect(hdc, &rc, (HBRUSH)GetStockObject(BLACK_BRUSH));
-    return 1; // 告訴 Windows 我們已經把背景塗黑了，不要再閃白光
+    // Don't paint anything — let EVR's last frame stay visible
+    // Prevents black flash during video loop restart
+    return 1;
   }
   case WM_DESTROY: {
     PostQuitMessage(0);

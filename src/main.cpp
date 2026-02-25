@@ -354,43 +354,63 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     MonitorInstance mon = {0};
     mon.rect = {0, 0, screenWidth, screenHeight};
 
-    // 25H2: Create a standalone popup window (NOT parented to Progman).
-    // DWM on 25H2 ignores child window rendering inside Progman.
-    mon.hwnd = CreateWindowEx(
-        WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME, "Dynamic Wallpaper",
-        WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, 0, 0,
-        screenWidth, screenHeight, NULL, NULL, hInstance, NULL);
+    // 24H2/25H2 approach (based on Lively Wallpaper fix):
+    // 1. Create a WS_POPUP window first (cross-process WS_CHILD fails)
+    // 2. SetParent into Progman
+    // 3. Add WS_EX_LAYERED + make fully opaque
+    // 4. Position between DefView (icons) and WorkerW (static wallpaper)
+    // This does NOT touch DefView at all — no icon glitches.
+
+    HWND progman = FindWindow("Progman", nullptr);
+    if (!progman) {
+      LogMsg("ERROR: Progman not found for injection!");
+    }
+
+    mon.hwnd =
+        CreateWindowEx(0, CLASS_NAME, "Dynamic Wallpaper",
+                       WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0,
+                       screenWidth, screenHeight, NULL, NULL, hInstance, NULL);
 
     if (mon.hwnd != NULL) {
-      LogMsg("Created standalone popup: " +
+      LogMsg("Created popup window: " +
              std::to_string((unsigned long long)mon.hwnd));
 
-      // Position at HWND_BOTTOM so it's below everything
-      SetWindowPos(mon.hwnd, HWND_BOTTOM, 0, 0, screenWidth, screenHeight,
-                   SWP_NOACTIVATE | SWP_SHOWWINDOW);
-      LogMsg("Positioned at HWND_BOTTOM.");
+      // Step 1: Inject into Progman's hierarchy
+      HWND oldParent = SetParent(mon.hwnd, progman);
+      LogMsg("SetParent to Progman. OldParent: " +
+             std::to_string((unsigned long long)oldParent));
 
-      // Reparent DefView (desktop icons) into our video window
-      // so icons render directly on top of the video
+      // Step 2: Convert style to WS_CHILD
+      LONG style = GetWindowLong(mon.hwnd, GWL_STYLE);
+      style = (style & ~WS_POPUP) | WS_CHILD;
+      SetWindowLong(mon.hwnd, GWL_STYLE, style);
+
+      // Step 3: Add WS_EX_LAYERED and make fully opaque
+      // This is the key to making it visible in 24H2/25H2's compositor
+      LONG exStyle = GetWindowLong(mon.hwnd, GWL_EXSTYLE);
+      SetWindowLong(mon.hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+      SetLayeredWindowAttributes(mon.hwnd, 0, 255, LWA_ALPHA);
+      LogMsg("Applied WS_EX_LAYERED with full opacity.");
+
+      // Step 4: Position between DefView and WorkerW
+      // Z-order in Progman should be: DefView (top) > OUR WINDOW > WorkerW
+      // (bottom)
       if (g_hwndDefView) {
-        HWND oldParent = SetParent(g_hwndDefView, mon.hwnd);
-        LogMsg("Reparented DefView into our video window. OldParent: " +
-               std::to_string((unsigned long long)oldParent));
-
-        // Position DefView to fill our entire window
-        SetWindowPos(g_hwndDefView, HWND_TOP, 0, 0, screenWidth, screenHeight,
+        // Place our window right after DefView (i.e., below icons)
+        SetWindowPos(mon.hwnd, g_hwndDefView, 0, 0, screenWidth, screenHeight,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        LogMsg("Positioned below DefView (icons stay on top).");
+      } else {
+        SetWindowPos(mon.hwnd, HWND_BOTTOM, 0, 0, screenWidth, screenHeight,
+                     SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        LogMsg("No DefView found, positioned at HWND_BOTTOM.");
+      }
 
-        // Make SysListView32 background transparent so icons don't show
-        // the cached static wallpaper snapshot behind them
-        HWND hListView =
-            FindWindowEx(g_hwndDefView, NULL, "SysListView32", NULL);
-        if (hListView) {
-          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)CLR_NONE);
-          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)CLR_NONE);
-          InvalidateRect(hListView, NULL, TRUE);
-          LogMsg("Set SysListView32 background to transparent.");
-        }
+      // Push WorkerW behind our window
+      if (g_hwndWorkerW) {
+        SetWindowPos(g_hwndWorkerW, mon.hwnd, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        LogMsg("Pushed WorkerW behind our video window.");
       }
 
       mon.player = new VideoPlayer(mon.hwnd);
@@ -433,16 +453,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   // Cleanup
   g_bRunning = false;
   // monitorThread.join();
-
-  // Restore DefView back to Progman before exiting
-  if (g_hwndDefView) {
-    HWND progman = FindWindow("Progman", nullptr);
-    if (progman) {
-      SetParent(g_hwndDefView, progman);
-      ShowWindow(g_hwndDefView, SW_SHOWNORMAL);
-      LogMsg("Restored DefView back to Progman.");
-    }
-  }
 
   for (auto &mon : g_Monitors) {
     if (mon.player) {

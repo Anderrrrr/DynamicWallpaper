@@ -360,9 +360,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     //    → ListView can erase properly → no selection trails
 
     mon.hwnd = CreateWindowEx(
-        WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME, "Dynamic Wallpaper",
-        WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0, screenWidth,
-        screenHeight, NULL, NULL, hInstance, NULL);
+        WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT, CLASS_NAME,
+        "Dynamic Wallpaper", WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN, 0, 0,
+        screenWidth, screenHeight, NULL, NULL, hInstance, NULL);
 
     if (mon.hwnd != NULL) {
       LogMsg("Created standalone popup: " +
@@ -438,8 +438,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
   }
 
   // Start background thread for auto-pause magic
-  // USER INSTRUCTION 2: Comment out monitorThread to prevent early pause
-  // logic std::thread monitorThread(MonitorThread);
+  std::thread monitorThread(MonitorThread);
 
   // Standard message loop
   MSG msg = {};
@@ -450,7 +449,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
 
   // Cleanup
   g_bRunning = false;
-  // monitorThread.join();
+  monitorThread.join();
 
   for (auto &mon : g_Monitors) {
     if (mon.player) {

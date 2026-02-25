@@ -1,7 +1,0 @@
-Â∞ãÊâæ Visual Studio Á∑®Ë≠Ø?∞Â?...
-?êÂ??æÂà∞ VS ÂÆâË?Ë∑ØÂ?: C:\Program Files\Microsoft Visual Studio\2022\Community
-Ê≠?ú®Ë®≠Â?Á∑®Ë≠Ø?∞Â?...
-**********************************************************************
-** Visual Studio 2022 Developer Command Prompt v17.14.16
-** Copyright (c) 2025 Microsoft Corporation
-**********************************************************************

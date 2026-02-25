@@ -377,6 +377,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
 
       // Reparent DefView into our popup so icons render on top of video
       if (g_hwndDefView) {
+        HWND progman = FindWindow("Progman", nullptr);
         HWND oldParent = SetParent(g_hwndDefView, mon.hwnd);
         LogMsg("Reparented DefView. OldParent: " +
                std::to_string((unsigned long long)oldParent));
@@ -384,16 +385,29 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
         SetWindowPos(g_hwndDefView, HWND_TOP, 0, 0, screenWidth, screenHeight,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW);
 
-        // Transparent background — no WS_EX_LAYERED to preserve selection
+        // Near-black colorkey for clean icon rendering
+        COLORREF keyColor = RGB(1, 0, 1);
         HWND hListView =
             FindWindowEx(g_hwndDefView, NULL, "SysListView32", NULL);
         if (hListView) {
-          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)CLR_NONE);
-          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)CLR_NONE);
+          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)keyColor);
+          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)keyColor);
+
+          LONG lvExStyle = GetWindowLong(hListView, GWL_EXSTYLE);
+          SetWindowLong(hListView, GWL_EXSTYLE, lvExStyle | WS_EX_LAYERED);
+          SetLayeredWindowAttributes(hListView, keyColor, 0, LWA_COLORKEY);
 
           RedrawWindow(hListView, NULL, NULL,
                        RDW_ERASE | RDW_INVALIDATE | RDW_ALLCHILDREN);
-          LogMsg("CLR_NONE on SysListView32 (no WS_EX_LAYERED).");
+          LogMsg("Near-black colorkey on SysListView32.");
+        }
+
+        // Make Progman (now empty, above us in Z-order) pass-through
+        // so mouse clicks reach our popup with DefView
+        if (progman) {
+          LONG exStyle = GetWindowLong(progman, GWL_EXSTYLE);
+          SetWindowLong(progman, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT);
+          LogMsg("Set WS_EX_TRANSPARENT on Progman for click passthrough.");
         }
       }
 

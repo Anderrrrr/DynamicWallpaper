@@ -385,29 +385,31 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
         SetWindowPos(g_hwndDefView, HWND_TOP, 0, 0, screenWidth, screenHeight,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW);
 
-        // Fix icon rendering WITHOUT WS_EX_LAYERED (preserves mouse input)
+        // Near-black colorkey: residual tint barely visible
+        COLORREF keyColor = RGB(1, 0, 1);
+
+        // Set SysListView32 BG + colorkey
         HWND hListView =
             FindWindowEx(g_hwndDefView, NULL, "SysListView32", NULL);
         if (hListView) {
-          // Clear the cached wallpaper background image
-          LVBKIMAGEA bki = {0};
-          bki.ulFlags = LVBKIF_SOURCE_NONE;
-          SendMessageA(hListView, LVM_SETBKIMAGEA, 0, (LPARAM)&bki);
+          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)keyColor);
+          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)keyColor);
 
-          // Set background to transparent
-          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)CLR_NONE);
-          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)CLR_NONE);
+          // Colorkey: DWM makes near-black pixels transparent
+          LONG lvExStyle = GetWindowLong(hListView, GWL_EXSTYLE);
+          SetWindowLong(hListView, GWL_EXSTYLE, lvExStyle | WS_EX_LAYERED);
+          SetLayeredWindowAttributes(hListView, keyColor, 0, LWA_COLORKEY);
 
           RedrawWindow(hListView, NULL, NULL,
                        RDW_ERASE | RDW_INVALIDATE | RDW_ALLCHILDREN);
-          LogMsg("Cleared BG image + CLR_NONE (no WS_EX_LAYERED).");
+          LogMsg("Near-black colorkey on SysListView32.");
         }
 
-        // Make Progman (now empty, above us in Z-order) pass-through
+        // Make Progman pass-through for mouse events (right-click etc.)
         if (progman) {
           LONG exStyle = GetWindowLong(progman, GWL_EXSTYLE);
           SetWindowLong(progman, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT);
-          LogMsg("Set WS_EX_TRANSPARENT on Progman for click passthrough.");
+          LogMsg("Set WS_EX_TRANSPARENT on Progman.");
         }
       }
 

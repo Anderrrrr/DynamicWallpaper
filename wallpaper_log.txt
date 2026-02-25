@@ -8803,3 +8803,37 @@ Set WS_EX_TRANSPARENT on Progman for click passthrough.
 Initializing player for span mode
 OpenFile succeeded. Waiting for Topology Ready...
 Topology READY! Video is now PLAYING!
+--- Application Started ---
+Video Paths count: 1
+Video[0]: C:\Users\ander\Downloads\girl-standing-in-meadow.3840x2160.mp4
+Applied WS_CLIPCHILDREN to Progman.
+Applied WS_CLIPCHILDREN to WorkerW.
+Returning final target canvas.
+g_TargetBackground handle: 1639736
+TargetBackground Show/Update called.
+Span mode. Screen: 1920x1080
+Created standalone popup: 3278782
+Positioned at HWND_BOTTOM.
+Reparented DefView. OldParent: 2164974
+Cleared BG image + CLR_NONE (no WS_EX_LAYERED).
+Set WS_EX_TRANSPARENT on Progman for click passthrough.
+Initializing player for span mode
+OpenFile succeeded. Waiting for Topology Ready...
+Topology READY! Video is now PLAYING!
+--- Application Started ---
+Video Paths count: 1
+Video[0]: C:\Users\ander\Downloads\girl-standing-in-meadow.3840x2160.mp4
+Applied WS_CLIPCHILDREN to Progman.
+Applied WS_CLIPCHILDREN to WorkerW.
+Returning final target canvas.
+g_TargetBackground handle: 1442322
+TargetBackground Show/Update called.
+Span mode. Screen: 1920x1080
+Created standalone popup: 3606910
+Positioned at HWND_BOTTOM.
+Reparented DefView. OldParent: 2164546
+Cleared BG image + CLR_NONE (no WS_EX_LAYERED).
+Set WS_EX_TRANSPARENT on Progman for click passthrough.
+Initializing player for span mode
+OpenFile succeeded. Waiting for Topology Ready...
+Topology READY! Video is now PLAYING!

@@ -384,27 +384,24 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
         SetWindowPos(g_hwndDefView, HWND_TOP, 0, 0, screenWidth, screenHeight,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW);
 
-        // Prevent DefView from painting its background over SysListView32
-        LONG dvStyle = GetWindowLong(g_hwndDefView, GWL_STYLE);
-        SetWindowLong(g_hwndDefView, GWL_STYLE, dvStyle | WS_CLIPCHILDREN);
+        // Near-black colorkey: any residual tint is barely visible
+        COLORREF keyColor = RGB(1, 0, 1);
 
-        COLORREF magicPink = RGB(255, 0, 255);
-
-        // Set SysListView32 BG to magic pink + colorkey
+        // Set SysListView32 BG + colorkey
         HWND hListView =
             FindWindowEx(g_hwndDefView, NULL, "SysListView32", NULL);
         if (hListView) {
-          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)magicPink);
-          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)magicPink);
+          SendMessage(hListView, LVM_SETBKCOLOR, 0, (LPARAM)keyColor);
+          SendMessage(hListView, LVM_SETTEXTBKCOLOR, 0, (LPARAM)keyColor);
 
-          // Colorkey on SysListView32: DWM makes pink pixels transparent
+          // Colorkey: DWM makes near-black pixels transparent
           LONG lvExStyle = GetWindowLong(hListView, GWL_EXSTYLE);
           SetWindowLong(hListView, GWL_EXSTYLE, lvExStyle | WS_EX_LAYERED);
-          SetLayeredWindowAttributes(hListView, magicPink, 0, LWA_COLORKEY);
+          SetLayeredWindowAttributes(hListView, keyColor, 0, LWA_COLORKEY);
 
           RedrawWindow(hListView, NULL, NULL,
                        RDW_ERASE | RDW_INVALIDATE | RDW_ALLCHILDREN);
-          LogMsg("Magic pink colorkey on ListView + hollow DefView BG.");
+          LogMsg("Near-black colorkey on SysListView32.");
         }
       }
 

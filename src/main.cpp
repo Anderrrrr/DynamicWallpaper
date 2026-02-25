@@ -384,9 +384,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
         SetWindowPos(g_hwndDefView, HWND_TOP, 0, 0, screenWidth, screenHeight,
                      SWP_NOACTIVATE | SWP_SHOWWINDOW);
 
-        // Kill DefView's own background so it doesn't paint over video
-        SetClassLongPtr(g_hwndDefView, GCLP_HBRBACKGROUND,
-                        (LONG_PTR)GetStockObject(HOLLOW_BRUSH));
+        // Prevent DefView from painting its background over SysListView32
+        LONG dvStyle = GetWindowLong(g_hwndDefView, GWL_STYLE);
+        SetWindowLong(g_hwndDefView, GWL_STYLE, dvStyle | WS_CLIPCHILDREN);
 
         COLORREF magicPink = RGB(255, 0, 255);
 

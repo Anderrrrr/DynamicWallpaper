@@ -1,57 +1,54 @@
 #pragma once
-#include <evr.h>
 #include <mfapi.h>
 #include <mferror.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
+#include <mutex>
 #include <string>
 #include <windows.h>
 
-
-// VideoPlayer class encapsulates Windows Media Foundation (MF) to play video to
-// a specific window.
-class VideoPlayer : public IMFAsyncCallback {
+class VideoPlayer {
 public:
-  VideoPlayer(HWND hwnd);
-  virtual ~VideoPlayer();
+  VideoPlayer();
+  ~VideoPlayer();
 
   HRESULT Initialize();
   void Shutdown();
 
   HRESULT OpenFile(const std::wstring &path);
-  HRESULT Play();
-  HRESULT Pause();
+  void Play();
+  void Pause();
 
   bool IsPlaying() const { return m_isPlaying; }
 
-  HRESULT ResizeVideo(WORD width, WORD height);
-  HRESULT
-  SetVideoWindow(HWND hwnd); // 直接將 EVR 渲染導向指定視窗（WorkerW/Progman）
+  // Retrieves the next video frame if it's time to display it.
+  // Returns S_OK and sets pData if a new frame is ready.
+  // Returns S_FALSE if there's no new frame yet (wait for next tick).
+  HRESULT GetNextFrame(BYTE **ppData, DWORD *pcbLength, UINT32 *pdwWidth,
+                       UINT32 *pdwHeight);
 
-  // IUnknown
-  STDMETHODIMP QueryInterface(REFIID riid, void **ppv);
-  STDMETHODIMP_(ULONG) AddRef();
-  STDMETHODIMP_(ULONG) Release();
-
-  // IMFAsyncCallback
-  STDMETHODIMP GetParameters(DWORD *pdwFlags, DWORD *pdwQueue);
-  STDMETHODIMP Invoke(IMFAsyncResult *pAsyncResult);
+  // Call after copying data from GetNextFrame
+  void UnlockFrame();
 
 private:
-  HRESULT CreateSession();
-  HRESULT CloseSession();
-  HRESULT CreateMediaSource(const std::wstring &url, IMFMediaSource **ppSource);
-  HRESULT CreateTopology(IMFMediaSource *pSource, HWND hVideoWindow,
-                         IMFTopology **ppTopology);
-  HRESULT AddToTopology(IMFTopology *pTopology, IMFMediaSource *pSource,
-                        DWORD streamIndex, HWND hwndVideo);
-  HRESULT HandleEvent(IMFMediaEvent *pEvent);
+  HRESULT Rewind();
 
-  HWND m_hwndVideo;
+  IMFSourceReader *m_pReader;
   bool m_isPlaying;
-  long m_nRefCount;
 
-  IMFMediaSession *m_pSession;
-  IMFMediaSource *m_pSource;
-  IMFVideoDisplayControl *m_pVideoDisplay;
+  UINT32 m_width;
+  UINT32 m_height;
+  LONGLONG m_hnsDuration;
+
+  // Clock sync
+  LARGE_INTEGER m_qpcFrequency;
+  LARGE_INTEGER m_qpcStart;
+  LONGLONG m_playbackStartHns; // Video time when playback started
+
+  // Current sample
+  IMFSample *m_pCurrentSample;
+  IMFMediaBuffer *m_pCurrentBuffer;
+  LONGLONG m_currentSamplePts;
+
+  std::mutex m_mutex;
 };

@@ -2,7 +2,9 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <shlwapi.h>
-#include <commctrl.h> // Added for ListView functions
+#include <d3d11.h>
+#include <dxgi1_2.h>
+#include <d2d1.h>
 // clang-format on
 #include <atomic>
 #include <iostream>
@@ -14,24 +16,229 @@
 #include <fstream>
 #include <sstream>
 
+#pragma comment(lib, "d3d11.lib")
+#pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "d2d1.lib")
+
 void LogMsg(const std::string &msg) {
   std::ofstream out("C:\\Users\\ander\\Dynamic_wallpaper\\debug_log.txt",
                     std::ios::app);
   out << msg << std::endl;
 }
 
+class D2DRenderer {
+public:
+  D2DRenderer(HWND hwnd)
+      : m_hwnd(hwnd), m_pDevice(nullptr), m_pContext(nullptr),
+        m_pSwapChain(nullptr), m_pRenderTarget(nullptr), m_pBitmap(nullptr),
+        m_videoWidth(0), m_videoHeight(0), m_pD2DFactory(nullptr) {}
+  ~D2DRenderer() { Cleanup(); }
+
+  bool Initialize(int width, int height) {
+    LogMsg("D2DRenderer::Initialize: Enter");
+    HRESULT hr;
+    D3D_FEATURE_LEVEL featureLevels[] = {
+        D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1};
+
+    LogMsg("D2DRenderer::Initialize: Calling D3D11CreateDevice");
+    hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
+                           D3D11_CREATE_DEVICE_BGRA_SUPPORT, featureLevels, 3,
+                           D3D11_SDK_VERSION, &m_pDevice, nullptr, &m_pContext);
+    if (FAILED(hr)) {
+      LogMsg("D3D11CreateDevice failed: " + std::to_string(hr));
+      return false;
+    }
+
+    LogMsg("D2DRenderer::Initialize: Getting DXGI objects");
+    IDXGIDevice *pDXGIDevice = nullptr;
+    hr =
+        m_pDevice->QueryInterface(__uuidof(IDXGIDevice), (void **)&pDXGIDevice);
+    if (FAILED(hr) || !pDXGIDevice) {
+      LogMsg("QueryInterface IDXGIDevice failed");
+      return false;
+    }
+
+    IDXGIAdapter *pAdapter = nullptr;
+    hr = pDXGIDevice->GetAdapter(&pAdapter);
+    if (FAILED(hr) || !pAdapter) {
+      LogMsg("GetAdapter failed");
+      return false;
+    }
+
+    IDXGIFactory2 *pFactory = nullptr;
+    hr = pAdapter->GetParent(__uuidof(IDXGIFactory2), (void **)&pFactory);
+    if (FAILED(hr) || !pFactory) {
+      LogMsg("GetParent IDXGIFactory2 failed");
+      return false;
+    }
+
+    DXGI_SWAP_CHAIN_DESC1 swapDesc = {};
+    swapDesc.Width = width;
+    swapDesc.Height = height;
+    swapDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    swapDesc.SampleDesc.Count = 1;
+    swapDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    swapDesc.BufferCount = 2;
+    swapDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    swapDesc.AlphaMode =
+        DXGI_ALPHA_MODE_IGNORE; // Changed to IGNORE for opaque WS_POPUP
+
+    LogMsg("D2DRenderer::Initialize: Calling CreateSwapChainForHwnd");
+    hr = pFactory->CreateSwapChainForHwnd(m_pDevice, m_hwnd, &swapDesc, nullptr,
+                                          nullptr, &m_pSwapChain);
+
+    pFactory->Release();
+    pAdapter->Release();
+    pDXGIDevice->Release();
+
+    if (FAILED(hr)) {
+      LogMsg("CreateSwapChainForHwnd failed: " +
+             std::to_string((unsigned int)hr));
+      return false;
+    }
+
+    LogMsg("D2DRenderer::Initialize: Calling D2D1CreateFactory");
+    hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &m_pD2DFactory);
+    if (FAILED(hr)) {
+      LogMsg("D2D1CreateFactory failed: " + std::to_string((unsigned int)hr));
+      return false;
+    }
+
+    LogMsg("D2DRenderer::Initialize: Calling CreateRenderTarget");
+    CreateRenderTarget();
+    LogMsg("D2DRenderer::Initialize: Success");
+    return true;
+  }
+
+  void CreateRenderTarget() {
+    IDXGISurface *pBackBuffer = nullptr;
+    m_pSwapChain->GetBuffer(0, __uuidof(IDXGISurface), (void **)&pBackBuffer);
+
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
+        D2D1_RENDER_TARGET_TYPE_DEFAULT,
+        D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED));
+
+    m_pD2DFactory->CreateDxgiSurfaceRenderTarget(pBackBuffer, &props,
+                                                 &m_pRenderTarget);
+    pBackBuffer->Release();
+  }
+
+  void Resize(int width, int height) {
+    if (!m_pSwapChain)
+      return;
+    if (m_pRenderTarget) {
+      m_pRenderTarget->Release();
+      m_pRenderTarget = nullptr;
+    }
+    m_pSwapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
+    CreateRenderTarget();
+  }
+
+  void RenderFrame(const BYTE *pData, UINT width, UINT height, DWORD cbLength) {
+    if (!m_pRenderTarget)
+      return;
+
+    if (!m_pBitmap || m_videoWidth != width || m_videoHeight != height) {
+      if (m_pBitmap)
+        m_pBitmap->Release();
+      m_pBitmap = nullptr;
+
+      D2D1_BITMAP_PROPERTIES props = {};
+      props.pixelFormat.format = DXGI_FORMAT_B8G8R8A8_UNORM;
+      props.pixelFormat.alphaMode = D2D1_ALPHA_MODE_IGNORE;
+      props.dpiX = 96.0f;
+      props.dpiY = 96.0f;
+
+      UINT32 pitch = cbLength / height;
+      m_pRenderTarget->CreateBitmap(D2D1::SizeU(width, height), pData, pitch,
+                                    &props, &m_pBitmap);
+      m_videoWidth = width;
+      m_videoHeight = height;
+    } else {
+      UINT32 pitch = cbLength / height;
+      D2D1_RECT_U destRect = D2D1::RectU(0, 0, width, height);
+      m_pBitmap->CopyFromMemory(&destRect, pData, pitch);
+    }
+
+    m_pRenderTarget->BeginDraw();
+    m_pRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::Black));
+
+    D2D1_SIZE_F rtSize = m_pRenderTarget->GetSize();
+    float srcAspect = (float)width / height;
+    float dstAspect = rtSize.width / rtSize.height;
+
+    D2D1_RECT_F destRect = D2D1::RectF(0, 0, rtSize.width, rtSize.height);
+    D2D1_RECT_F srcRect = D2D1::RectF(0, 0, (float)width, (float)height);
+
+    if (srcAspect > dstAspect) {
+      float visibleWidth = height * dstAspect;
+      float margin = (width - visibleWidth) / 2.0f;
+      srcRect.left = margin;
+      srcRect.right = width - margin;
+    } else if (srcAspect < dstAspect) {
+      float visibleHeight = width / dstAspect;
+      float margin = (height - visibleHeight) / 2.0f;
+      srcRect.top = margin;
+      srcRect.bottom = height - margin;
+    }
+
+    m_pRenderTarget->DrawBitmap(m_pBitmap, destRect, 1.0f,
+                                D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,
+                                &srcRect);
+
+    m_pRenderTarget->EndDraw();
+    m_pSwapChain->Present(1, 0); // VSYNC
+  }
+
+  void Cleanup() {
+    if (m_pBitmap) {
+      m_pBitmap->Release();
+      m_pBitmap = nullptr;
+    }
+    if (m_pRenderTarget) {
+      m_pRenderTarget->Release();
+      m_pRenderTarget = nullptr;
+    }
+    if (m_pSwapChain) {
+      m_pSwapChain->Release();
+      m_pSwapChain = nullptr;
+    }
+    if (m_pContext) {
+      m_pContext->Release();
+      m_pContext = nullptr;
+    }
+    if (m_pDevice) {
+      m_pDevice->Release();
+      m_pDevice = nullptr;
+    }
+    if (m_pD2DFactory) {
+      m_pD2DFactory->Release();
+      m_pD2DFactory = nullptr;
+    }
+  }
+
+private:
+  HWND m_hwnd;
+  ID3D11Device *m_pDevice;
+  ID3D11DeviceContext *m_pContext;
+  IDXGISwapChain1 *m_pSwapChain;
+  ID2D1RenderTarget *m_pRenderTarget;
+  ID2D1Bitmap *m_pBitmap;
+  UINT m_videoWidth;
+  UINT m_videoHeight;
+  ID2D1Factory *m_pD2DFactory;
+};
+
 // Globals
 struct MonitorInstance {
   HWND hwnd;
   VideoPlayer *player;
+  D2DRenderer *renderer;
   RECT rect;
 };
 
 std::vector<MonitorInstance> g_Monitors;
-HWND g_hwndWorkerW = nullptr;
-HWND g_hwndDefView = nullptr;
 std::atomic<bool> g_bRunning(true);
-HWND g_TargetBackground = nullptr;
 HINSTANCE g_hInstance = nullptr;
 const char CLASS_NAME[] = "DynamicWallpaperClass";
 
@@ -42,21 +249,9 @@ bool g_bSpanMode = true;
 #define WM_USER_PAUSE (WM_USER + 2)
 #define WM_USER_INIT_VIDEO (WM_USER + 3)
 
-// Callback to find the specific WorkerW that acts as the desktop background
-// layer
-// Global to store a fallback WorkerW
-HWND g_hwndFallbackWorkerW = nullptr;
+HWND g_hwndDefView = nullptr;
 
-BOOL CALLBACK EnumWindowsProc(HWND hwnd, LPARAM lParam) {
-  HWND p = FindWindowEx(hwnd, NULL, "SHELLDLL_DefView", NULL);
-  if (p != NULL) {
-    g_hwndDefView = p; // 儲存 DefView 序號，稍後用於 Z-Order 定位
-    g_hwndWorkerW = FindWindowEx(NULL, hwnd, "WorkerW", NULL);
-  }
-  return TRUE;
-}
-
-HWND GetWallpaperWindow() {
+HWND GetDesktopLayer() {
   HWND progman = FindWindow("Progman", nullptr);
   if (!progman) {
     LogMsg("ERROR: Progman not found!");
@@ -64,54 +259,38 @@ HWND GetWallpaperWindow() {
   }
 
   DWORD_PTR result = 0;
-  SendMessageTimeout(progman, 0x052C, 0, 0, SMTO_NORMAL, 1000, &result);
-  Sleep(500); // 延長等待時間，25H2 有時動作比較慢
+  // Send 0x052C to Progman to split the desktop (create WorkerW)
+  SendMessageTimeout(progman, 0x052C, 0x0D, 0x01, SMTO_NORMAL, 1000, &result);
 
-  g_hwndDefView = FindWindowEx(progman, NULL, "SHELLDLL_DefView", NULL);
+  // Retry loop because Explorer might take a moment
+  for (int i = 0; i < 10; ++i) {
+    g_hwndDefView = FindWindowEx(progman, NULL, "SHELLDLL_DefView", NULL);
+    if (!g_hwndDefView) {
+      EnumWindows(
+          [](HWND hwnd, LPARAM lParam) -> BOOL {
+            HWND p = FindWindowEx(hwnd, NULL, "SHELLDLL_DefView", NULL);
+            if (p != NULL) {
+              g_hwndDefView = p;
+              return FALSE;
+            }
+            return TRUE;
+          },
+          0);
+    }
+
+    if (g_hwndDefView) {
+      LogMsg("Successfully found DefView on attempt " + std::to_string(i + 1));
+      break;
+    }
+    Sleep(500);
+  }
+
   if (!g_hwndDefView) {
-    EnumWindows(
-        [](HWND hwnd, LPARAM lParam) -> BOOL {
-          HWND p = FindWindowEx(hwnd, NULL, "SHELLDLL_DefView", NULL);
-          if (p != NULL) {
-            g_hwndDefView = p;
-            return FALSE;
-          }
-          return TRUE;
-        },
-        0);
+    LogMsg("WARNING: Failed to find SHELLDLL_DefView. Z-ordering under icons "
+           "may fail.");
   }
 
-  HWND workerW = FindWindowEx(progman, NULL, "WorkerW", NULL);
-  if (!workerW) {
-    EnumWindows(
-        [](HWND hwnd, LPARAM lParam) -> BOOL {
-          char className[256];
-          GetClassNameA(hwnd, className, sizeof(className));
-          if (strcmp(className, "WorkerW") == 0 &&
-              GetWindow(hwnd, GW_CHILD) == NULL) {
-            *(HWND *)lParam = hwnd;
-            return FALSE;
-          }
-          return TRUE;
-        },
-        (LPARAM)&workerW);
-  }
-  g_hwndWorkerW = workerW;
-
-  HWND target = workerW ? workerW : progman;
-
-  LONG pStyle = GetWindowLong(progman, GWL_STYLE);
-  SetWindowLong(progman, GWL_STYLE, pStyle | WS_CLIPCHILDREN);
-  LogMsg("Applied WS_CLIPCHILDREN to Progman.");
-
-  if (target && target != progman) {
-    LONG tStyle = GetWindowLong(target, GWL_STYLE);
-    SetWindowLong(target, GWL_STYLE, tStyle | WS_CLIPCHILDREN);
-    LogMsg("Applied WS_CLIPCHILDREN to WorkerW.");
-  }
-
-  LogMsg("Returning final target canvas.");
-  return target;
+  return progman;
 }
 
 bool IsFullscreenAppRunning() {
@@ -156,7 +335,6 @@ bool IsFullscreenAppRunning() {
 void MonitorThread() {
   while (g_bRunning) {
     bool hide = IsFullscreenAppRunning();
-    // LogMsg("MonitorThread heartbeat. hide=" + std::to_string(hide));
     for (auto &mon : g_Monitors) {
       if (hide) {
         PostMessage(mon.hwnd, WM_USER_PAUSE, 0, 0);
@@ -170,54 +348,51 @@ void MonitorThread() {
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam,
                             LPARAM lParam) {
-  VideoPlayer *player = nullptr;
+  MonitorInstance *pMon = nullptr;
   if (uMsg == WM_CREATE) {
     CREATESTRUCT *pcs = (CREATESTRUCT *)lParam;
-    player = (VideoPlayer *)pcs->lpCreateParams;
-    SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)player);
+    pMon = (MonitorInstance *)pcs->lpCreateParams;
+    SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pMon);
   } else {
-    player = (VideoPlayer *)GetWindowLongPtr(hwnd, GWLP_USERDATA);
+    pMon = (MonitorInstance *)GetWindowLongPtr(hwnd, GWLP_USERDATA);
   }
 
   switch (uMsg) {
   case WM_USER_INIT_VIDEO:
-    if (player) {
+    if (pMon && pMon->player) {
       if (!g_VideoPaths.empty()) {
-        HRESULT hrOpen = player->OpenFile(g_VideoPaths[0]);
+        HRESULT hrOpen =
+            pMon->player->OpenFile(g_VideoPaths[0]); // TODO: handle index
         if (SUCCEEDED(hrOpen)) {
-          LogMsg("OpenFile succeeded. Waiting for Topology Ready...");
+          LogMsg("OpenFile succeeded.");
+          pMon->player->Play();
         } else {
-          LogMsg("OpenFile failed: 0x" + [&]() {
-            std::ostringstream ss;
-            ss << std::hex << hrOpen;
-            return ss.str();
-          }());
+          LogMsg("OpenFile failed.");
         }
       }
     }
     return 0;
 
   case WM_USER_PLAY:
-    if (player && !player->IsPlaying()) {
-      player->Play();
+    if (pMon && pMon->player && !pMon->player->IsPlaying()) {
+      pMon->player->Play();
     }
     return 0;
   case WM_USER_PAUSE:
-    if (player && player->IsPlaying()) {
-      player->Pause();
+    if (pMon && pMon->player && pMon->player->IsPlaying()) {
+      pMon->player->Pause();
     }
     return 0;
   case WM_SIZE:
-    if (player) {
-      player->ResizeVideo(LOWORD(lParam), HIWORD(lParam));
+    if (pMon && pMon->renderer) {
+      pMon->renderer->Resize(LOWORD(lParam), HIWORD(lParam));
     }
     return 0;
 
-  case WM_ERASEBKGND: {
-    // Don't paint anything — let EVR's last frame stay visible
-    // Prevents black flash during video loop restart
+  case WM_ERASEBKGND:
+    // We draw the background using D3D11
     return 1;
-  }
+
   case WM_DESTROY: {
     PostQuitMessage(0);
     return 0;
@@ -231,52 +406,48 @@ BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor,
                               LPRECT lprcMonitor, LPARAM dwData) {
   RECT rc = *lprcMonitor;
 
-  MapWindowPoints(NULL, g_TargetBackground, (LPPOINT)&rc, 2);
   int width = rc.right - rc.left;
   int height = rc.bottom - rc.top;
-  int x = rc.left; // 轉換過後的相對 X
-  int y = rc.top;  // 轉換過後的相對 Y
+  int x = rc.left;
+  int y = rc.top;
 
   size_t monitorIndex = g_Monitors.size();
 
-  // Choose video path
-  std::wstring videoPath = L"";
-  if (!g_VideoPaths.empty()) {
-    videoPath = g_VideoPaths[monitorIndex % g_VideoPaths.size()];
-  }
+  HWND progman = GetDesktopLayer();
 
   MonitorInstance mon = {0};
   mon.rect = rc;
 
-  // Create window for this monitor  // Calculate relative coordinates for
-  // child window if necessary
-
-  mon.hwnd = CreateWindowEx(
-      0, CLASS_NAME, "Dynamic Wallpaper",
-      WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, x, y, width,
-      height, g_TargetBackground, NULL, g_hInstance, NULL);
+  mon.hwnd = CreateWindowEx(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME,
+                            "Dynamic Wallpaper", WS_POPUP | WS_VISIBLE, x, y,
+                            width, height, NULL, NULL, g_hInstance,
+                            &mon); // pass mon loosely, will patch it up
 
   if (mon.hwnd != NULL) {
-    if (g_TargetBackground == FindWindow("Progman", nullptr) && g_hwndDefView) {
+    if (progman && g_hwndDefView) {
+      SetParent(mon.hwnd, progman);
       SetWindowPos(mon.hwnd, g_hwndDefView, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    } else {
+      SetWindowPos(mon.hwnd, HWND_BOTTOM, 0, 0, 0, 0,
                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
 
-    mon.player = new VideoPlayer(mon.hwnd);
-    SetWindowLongPtr(mon.hwnd, GWLP_USERDATA, (LONG_PTR)mon.player);
+    mon.player = new VideoPlayer();
+    mon.renderer = new D2DRenderer(mon.hwnd);
 
-    if (SUCCEEDED(mon.player->Initialize())) {
-      PostMessage(mon.hwnd, WM_USER_INIT_VIDEO, 0, 0);
-
-      if (g_hwndDefView) {
-        ShowWindow(g_hwndDefView, SW_HIDE);
-        Sleep(20);
-        ShowWindow(g_hwndDefView, SW_SHOWNORMAL);
-        LogMsg("DefView refreshed to clear snapshot.");
-      }
-    }
-
+    // Patch the userdata properly now that we have allocated the objects
     g_Monitors.push_back(mon);
+    SetWindowLongPtr(mon.hwnd, GWLP_USERDATA, (LONG_PTR)&g_Monitors.back());
+    MonitorInstance &refMon = g_Monitors.back();
+
+    if (refMon.renderer->Initialize(width, height)) {
+      if (SUCCEEDED(refMon.player->Initialize())) {
+        PostMessage(refMon.hwnd, WM_USER_INIT_VIDEO, 0, 0);
+      }
+    } else {
+      LogMsg("Failed to initialize D2D Renderer for monitor!");
+    }
   }
 
   return TRUE;
@@ -298,7 +469,6 @@ void ParseCommandLine() {
         g_VideoPaths.push_back(argv[i]);
       }
     } else {
-      // Default to span if no flag but has video
       g_bSpanMode = true;
       g_VideoPaths.push_back(argv[1]);
     }
@@ -307,9 +477,9 @@ void ParseCommandLine() {
   if (g_VideoPaths.empty()) {
     char path[MAX_PATH];
     GetModuleFileNameA(NULL, path, MAX_PATH);
-    PathRemoveFileSpecA(path); // DynamicWallpaper.exe
-    PathRemoveFileSpecA(path); // Release
-    PathRemoveFileSpecA(path); // build_msvc
+    PathRemoveFileSpecA(path);
+    PathRemoveFileSpecA(path);
+    PathRemoveFileSpecA(path);
     std::string fb = std::string(path) + "\\pixel-rain-traffic.3840x2160.mp4";
     g_VideoPaths.push_back(std::wstring(fb.begin(), fb.end()));
   }
@@ -318,39 +488,16 @@ void ParseCommandLine() {
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
                    int nCmdShow) {
-  // Be DPI aware so GetSystemMetrics returns true 4K resolution instead of
-  // scaled 1080p
   SetProcessDPIAware();
 
   g_hInstance = hInstance;
-  // USER INSTRUCTION 1: EVR requires STA (Apartment) threading model.
-  HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+  HRESULT hr = CoInitializeEx(
+      NULL, COINIT_MULTITHREADED); // Apartment not needed since no EVR
   if (FAILED(hr))
     return -1;
 
-  LogMsg("--- Application Started ---");
+  LogMsg("--- Application Started (D3D11/D2D Bypass) ---");
   ParseCommandLine();
-
-  LogMsg("Video Paths count: " + std::to_string(g_VideoPaths.size()));
-  if (!g_VideoPaths.empty()) {
-    std::wstring vp = g_VideoPaths[0];
-    LogMsg("Video[0]: " + std::string(vp.begin(), vp.end()));
-  }
-
-  g_TargetBackground = GetWallpaperWindow();
-  if (!g_TargetBackground) {
-    LogMsg(
-        "GetWallpaperWindow returned NULL. Failed locating background HWND.");
-  }
-  LogMsg("g_TargetBackground handle: " +
-         std::to_string((unsigned long long)g_TargetBackground));
-
-  // 確保背景視窗可見與重繪，讓 EVR 得以渲染
-  if (g_TargetBackground) {
-    ShowWindow(g_TargetBackground, SW_SHOW);
-    UpdateWindow(g_TargetBackground);
-    LogMsg("TargetBackground Show/Update called.");
-  }
 
   WNDCLASS wc = {};
   wc.lpfnWndProc = WindowProc;
@@ -367,82 +514,46 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     LogMsg("Span mode. Screen: " + std::to_string(screenWidth) + "x" +
            std::to_string(screenHeight));
 
+    HWND progman = GetDesktopLayer();
+
     MonitorInstance mon = {0};
-    mon.rect = {screenX, screenY, screenX + screenWidth, screenY + screenHeight};
+    mon.rect = {screenX, screenY, screenX + screenWidth,
+                screenY + screenHeight};
 
-    HWND progman = FindWindow("Progman", nullptr);
-
-    // Strategy: Lively Wallpaper 24H2/25H2 workaround
-    // 1. Create popup with WS_EX_LAYERED + full opacity (for DWM compositing)
-    // 2. SetParent into Progman
-    // 3. Position just below DefView (icon layer stays on top, untouched)
-    // 4. Push WorkerW behind our window
-    // -> DefView never reparented -> icons fully interactive (click + drag)
-
-    mon.hwnd = CreateWindowEx(
-        WS_EX_LAYERED | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
-        CLASS_NAME, "Dynamic Wallpaper",
-        WS_POPUP | WS_VISIBLE | WS_CLIPCHILDREN,
-        screenX, screenY, screenWidth, screenHeight,
-        NULL, NULL, hInstance, NULL);
+    mon.hwnd = CreateWindowEx(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME,
+                              "Dynamic Wallpaper", WS_POPUP | WS_VISIBLE,
+                              screenX, screenY, screenWidth, screenHeight, NULL,
+                              NULL, hInstance, &mon);
 
     if (mon.hwnd != NULL) {
-      // Make fully opaque - WS_EX_LAYERED is only needed for DWM compositing
-      SetLayeredWindowAttributes(mon.hwnd, 0, 255, LWA_ALPHA);
-
-      LogMsg("Created layered popup: " +
-             std::to_string((unsigned long long)mon.hwnd));
-      LogMsg("Progman: " + std::to_string((unsigned long long)progman));
-      LogMsg("DefView: " + std::to_string((unsigned long long)g_hwndDefView));
-      LogMsg("WorkerW: " + std::to_string((unsigned long long)g_hwndWorkerW));
-
-      // Step 2: Find DefView's actual parent - on 25H2 it may NOT be in Progman
-      HWND defViewParent = GetParent(g_hwndDefView);
-      LogMsg("DefView parent: " + std::to_string((unsigned long long)defViewParent));
-
-      // Reparent our video into the SAME parent as DefView (so they're siblings)
-      HWND targetParent = defViewParent ? defViewParent : progman;
-      HWND oldParent = SetParent(mon.hwnd, targetParent);
-      LogMsg("SetParent to: " + std::to_string((unsigned long long)targetParent) +
-             " OldParent: " + std::to_string((unsigned long long)oldParent));
-
-      // After SetParent, reposition to cover the parent's client area
-      RECT rcParent;
-      GetClientRect(targetParent, &rcParent);
-      LogMsg("Parent client rect: " + std::to_string(rcParent.right) + "x" +
-             std::to_string(rcParent.bottom));
-
-      // Step 3: Position our window just below DefView (now they're siblings)
-      SetWindowPos(mon.hwnd, g_hwndDefView, 0, 0,
-                   rcParent.right, rcParent.bottom,
-                   SWP_NOACTIVATE);
-      LogMsg("Positioned just below DefView in Z-order.");
-
-      // Verify final state
-      RECT rcFinal;
-      GetWindowRect(mon.hwnd, &rcFinal);
-      LogMsg("Video window final rect: " +
-             std::to_string(rcFinal.left) + "," + std::to_string(rcFinal.top) +
-             " - " + std::to_string(rcFinal.right) + "," + std::to_string(rcFinal.bottom));
-      LogMsg("IsWindowVisible: " + std::to_string(IsWindowVisible(mon.hwnd)));
-
-      mon.player = new VideoPlayer(mon.hwnd);
-      SetWindowLongPtr(mon.hwnd, GWLP_USERDATA, (LONG_PTR)mon.player);
-
-      LogMsg("Initializing player for span mode");
-      HRESULT hrInit = mon.player->Initialize();
-      if (SUCCEEDED(hrInit)) {
-        PostMessage(mon.hwnd, WM_USER_INIT_VIDEO, 0, 0);
+      if (progman && g_hwndDefView) {
+        SetParent(mon.hwnd, progman);
+        SetWindowPos(mon.hwnd, g_hwndDefView, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
       } else {
-        LogMsg("Initialize failed: " + std::to_string(hrInit));
+        SetWindowPos(mon.hwnd, HWND_BOTTOM, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
       }
+
+      mon.player = new VideoPlayer();
+      mon.renderer = new D2DRenderer(mon.hwnd);
+
       g_Monitors.push_back(mon);
-    } else {
-      LogMsg("ERROR: CreateWindowEx failed! Error code: " +
-             std::to_string(GetLastError()));
+      SetWindowLongPtr(mon.hwnd, GWLP_USERDATA, (LONG_PTR)&g_Monitors[0]);
+
+      if (g_Monitors[0].renderer->Initialize(screenWidth, screenHeight)) {
+        LogMsg("Span mode D2D Renderer initialized.");
+        if (SUCCEEDED(g_Monitors[0].player->Initialize())) {
+          LogMsg("Span mode player initialized. Posting WM_USER_INIT_VIDEO.");
+          PostMessage(mon.hwnd, WM_USER_INIT_VIDEO, 0, 0);
+        } else {
+          LogMsg("Failed to initialize player in span mode.");
+        }
+      } else {
+        LogMsg("Failed to initialize D2D Renderer in span mode.");
+      }
     }
   } else {
-    // 復原原本的多螢幕模式邏輯
     EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, 0);
   }
 
@@ -452,21 +563,49 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     return -1;
   }
 
-  // Start background thread for auto-pause magic
   std::thread monitorThread(MonitorThread);
 
-  // Standard message loop
   MSG msg = {};
-  while (GetMessage(&msg, NULL, 0, 0) > 0) {
-    TranslateMessage(&msg);
-    DispatchMessage(&msg);
+  while (g_bRunning) {
+    bool hasMessage = false;
+    if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+      if (msg.message == WM_QUIT) {
+        g_bRunning = false;
+        break;
+      }
+      TranslateMessage(&msg);
+      DispatchMessage(&msg);
+      hasMessage = true;
+    }
+
+    bool frameRendered = false;
+    for (auto &mon : g_Monitors) {
+      if (mon.player && mon.renderer) {
+        BYTE *pData = NULL;
+        DWORD cbLength = 0;
+        UINT32 width = 0, height = 0;
+        HRESULT hrFrame =
+            mon.player->GetNextFrame(&pData, &cbLength, &width, &height);
+        if (hrFrame == S_OK && pData) {
+          mon.renderer->RenderFrame(pData, width, height, cbLength);
+          mon.player->UnlockFrame();
+          frameRendered = true;
+        }
+      }
+    }
+
+    // Sleep dynamically to yield CPU if not busy
+    if (!hasMessage && !frameRendered) {
+      Sleep(1);
+    }
   }
 
-  // Cleanup
-  g_bRunning = false;
   monitorThread.join();
 
   for (auto &mon : g_Monitors) {
+    if (mon.renderer) {
+      delete mon.renderer;
+    }
     if (mon.player) {
       mon.player->Shutdown();
       delete mon.player;

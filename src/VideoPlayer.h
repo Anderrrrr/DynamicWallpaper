@@ -1,4 +1,6 @@
 #pragma once
+#include <d3d11.h>
+#include <dxgi1_2.h>
 #include <mfapi.h>
 #include <mferror.h>
 #include <mfidl.h>
@@ -7,12 +9,13 @@
 #include <string>
 #include <windows.h>
 
+
 class VideoPlayer {
 public:
   VideoPlayer();
   ~VideoPlayer();
 
-  HRESULT Initialize();
+  HRESULT Initialize(ID3D11Device *pDevice);
   void Shutdown();
 
   HRESULT OpenFile(const std::wstring &path);
@@ -24,7 +27,7 @@ public:
   // Retrieves the next video frame if it's time to display it.
   // Returns S_OK and sets pData if a new frame is ready.
   // Returns S_FALSE if there's no new frame yet (wait for next tick).
-  HRESULT GetNextFrame(BYTE **ppData, DWORD *pcbLength, UINT32 *pdwWidth,
+  HRESULT GetNextFrame(ID3D11Texture2D **ppTexture, UINT32 *pdwWidth,
                        UINT32 *pdwHeight);
 
   // Call after copying data from GetNextFrame
@@ -47,8 +50,10 @@ private:
 
   // Current sample
   IMFSample *m_pCurrentSample;
-  IMFMediaBuffer *m_pCurrentBuffer;
   LONGLONG m_currentSamplePts;
+
+  IMFDXGIDeviceManager *m_pDeviceManager;
+  UINT m_resetToken;
 
   std::mutex m_mutex;
 };

@@ -21,36 +21,47 @@ template <class T> void SafeRelease(T **ppT) {
 VideoPlayer::VideoPlayer()
     : m_pReader(NULL), m_isPlaying(false), m_width(0), m_height(0),
       m_hnsDuration(0), m_playbackStartHns(0), m_pCurrentSample(NULL),
-      m_pCurrentBuffer(NULL), m_currentSamplePts(0) {
+      m_currentSamplePts(0), m_pDeviceManager(NULL), m_resetToken(0) {
   QueryPerformanceFrequency(&m_qpcFrequency);
   m_qpcStart.QuadPart = 0;
 }
 
 VideoPlayer::~VideoPlayer() { Shutdown(); }
 
-HRESULT VideoPlayer::Initialize() { return MFStartup(MF_VERSION); }
+HRESULT VideoPlayer::Initialize(ID3D11Device *pDevice) {
+  HRESULT hr = MFStartup(MF_VERSION);
+  if (FAILED(hr))
+    return hr;
+
+  hr = MFCreateDXGIDeviceManager(&m_resetToken, &m_pDeviceManager);
+  if (FAILED(hr))
+    return hr;
+
+  hr = m_pDeviceManager->ResetDevice(pDevice, m_resetToken);
+  return hr;
+}
 
 void VideoPlayer::Shutdown() {
   std::lock_guard<std::mutex> lock(m_mutex);
-  SafeRelease(&m_pCurrentBuffer);
   SafeRelease(&m_pCurrentSample);
   SafeRelease(&m_pReader);
+  SafeRelease(&m_pDeviceManager);
   MFShutdown();
 }
 
 HRESULT VideoPlayer::OpenFile(const std::wstring &path) {
   std::lock_guard<std::mutex> lock(m_mutex);
 
-  SafeRelease(&m_pCurrentBuffer);
   SafeRelease(&m_pCurrentSample);
   SafeRelease(&m_pReader);
 
   IMFAttributes *pAttributes = NULL;
-  HRESULT hr = MFCreateAttributes(&pAttributes, 1);
+  HRESULT hr = MFCreateAttributes(&pAttributes, 2);
   if (FAILED(hr))
     return hr;
 
-  hr = pAttributes->SetUINT32(MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, TRUE);
+  hr = pAttributes->SetUnknown(MF_SOURCE_READER_D3D_MANAGER, m_pDeviceManager);
+  hr = pAttributes->SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE);
 
   hr = MFCreateSourceReaderFromURL(path.c_str(), pAttributes, &m_pReader);
   SafeRelease(&pAttributes);
@@ -62,7 +73,7 @@ HRESULT VideoPlayer::OpenFile(const std::wstring &path) {
   hr = MFCreateMediaType(&pMediaType);
   if (SUCCEEDED(hr)) {
     pMediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
-    pMediaType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
+    pMediaType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_NV12);
     hr = m_pReader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM,
                                         NULL, pMediaType);
     SafeRelease(&pMediaType);
@@ -119,7 +130,6 @@ HRESULT VideoPlayer::Rewind() {
   PropVariantClear(&var);
 
   if (SUCCEEDED(hr)) {
-    SafeRelease(&m_pCurrentBuffer);
     SafeRelease(&m_pCurrentSample);
 
     if (m_isPlaying) {
@@ -131,8 +141,8 @@ HRESULT VideoPlayer::Rewind() {
   return hr;
 }
 
-HRESULT VideoPlayer::GetNextFrame(BYTE **ppData, DWORD *pcbLength,
-                                  UINT32 *pdwWidth, UINT32 *pdwHeight) {
+HRESULT VideoPlayer::GetNextFrame(ID3D11Texture2D **ppTexture, UINT32 *pdwWidth,
+                                  UINT32 *pdwHeight) {
   std::lock_guard<std::mutex> lock(m_mutex);
 
   if (!m_isPlaying || !m_pReader) {
@@ -171,20 +181,21 @@ HRESULT VideoPlayer::GetNextFrame(BYTE **ppData, DWORD *pcbLength,
     }
 
     if (m_currentSamplePts <= currentVideoTime) {
-      if (!m_pCurrentBuffer) {
-        HRESULT hr =
-            m_pCurrentSample->ConvertToContiguousBuffer(&m_pCurrentBuffer);
-        if (FAILED(hr))
-          return hr;
+      IMFMediaBuffer *pBuffer = NULL;
+      HRESULT hr = m_pCurrentSample->GetBufferByIndex(0, &pBuffer);
+      if (SUCCEEDED(hr)) {
+        IMFDXGIBuffer *pDXGIBuffer = NULL;
+        hr = pBuffer->QueryInterface(__uuidof(IMFDXGIBuffer),
+                                     (void **)&pDXGIBuffer);
+        if (SUCCEEDED(hr)) {
+          hr = pDXGIBuffer->GetResource(__uuidof(ID3D11Texture2D),
+                                        (void **)ppTexture);
+          pDXGIBuffer->Release();
+        }
+        pBuffer->Release();
       }
 
-      BYTE *pbData = NULL;
-      DWORD cbMaxLength = 0, cbCurrentLength = 0;
-      HRESULT hr =
-          m_pCurrentBuffer->Lock(&pbData, &cbMaxLength, &cbCurrentLength);
       if (SUCCEEDED(hr)) {
-        *ppData = pbData;
-        *pcbLength = cbCurrentLength;
         *pdwWidth = m_width;
         *pdwHeight = m_height;
       }
@@ -197,9 +208,5 @@ HRESULT VideoPlayer::GetNextFrame(BYTE **ppData, DWORD *pcbLength,
 
 void VideoPlayer::UnlockFrame() {
   std::lock_guard<std::mutex> lock(m_mutex);
-  if (m_pCurrentBuffer) {
-    m_pCurrentBuffer->Unlock();
-    SafeRelease(&m_pCurrentBuffer);
-    SafeRelease(&m_pCurrentSample);
-  }
+  SafeRelease(&m_pCurrentSample);
 }

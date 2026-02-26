@@ -3,8 +3,12 @@
 #include <shellapi.h>
 #include <shlwapi.h>
 #include <d3d11.h>
+// clang-format off
+#include <windows.h>
+#include <shellapi.h>
+#include <shlwapi.h>
+#include <d3d11.h>
 #include <dxgi1_2.h>
-#include <d2d1.h>
 // clang-format on
 #include <atomic>
 #include <iostream>
@@ -18,7 +22,6 @@
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
-#pragma comment(lib, "d2d1.lib")
 
 void LogMsg(const std::string &msg) {
   std::ofstream out("C:\\Users\\ander\\Dynamic_wallpaper\\debug_log.txt",
@@ -26,51 +29,39 @@ void LogMsg(const std::string &msg) {
   out << msg << std::endl;
 }
 
-class D2DRenderer {
+class D3DRenderer {
 public:
-  D2DRenderer(HWND hwnd)
+  D3DRenderer(HWND hwnd)
       : m_hwnd(hwnd), m_pDevice(nullptr), m_pContext(nullptr),
-        m_pSwapChain(nullptr), m_pRenderTarget(nullptr), m_pBitmap(nullptr),
-        m_videoWidth(0), m_videoHeight(0), m_pD2DFactory(nullptr) {}
-  ~D2DRenderer() { Cleanup(); }
+        m_pSwapChain(nullptr), m_pVideoDevice(nullptr),
+        m_pVideoContext(nullptr), m_pVideoEnum(nullptr),
+        m_pVideoProcessor(nullptr), m_pOutputView(nullptr), m_videoWidth(0),
+        m_videoHeight(0) {}
+  ~D3DRenderer() { Cleanup(); }
+
+  ID3D11Device *GetDevice() const { return m_pDevice; }
 
   bool Initialize(int width, int height) {
-    LogMsg("D2DRenderer::Initialize: Enter");
+    LogMsg("D3DRenderer::Initialize: Enter");
     HRESULT hr;
     D3D_FEATURE_LEVEL featureLevels[] = {
         D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0, D3D_FEATURE_LEVEL_10_1};
 
-    LogMsg("D2DRenderer::Initialize: Calling D3D11CreateDevice");
-    hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
-                           D3D11_CREATE_DEVICE_BGRA_SUPPORT, featureLevels, 3,
-                           D3D11_SDK_VERSION, &m_pDevice, nullptr, &m_pContext);
-    if (FAILED(hr)) {
-      LogMsg("D3D11CreateDevice failed: " + std::to_string(hr));
+    hr = D3D11CreateDevice(
+        nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
+        D3D11_CREATE_DEVICE_VIDEO_SUPPORT | D3D11_CREATE_DEVICE_BGRA_SUPPORT,
+        featureLevels, 3, D3D11_SDK_VERSION, &m_pDevice, nullptr, &m_pContext);
+    if (FAILED(hr))
       return false;
-    }
 
-    LogMsg("D2DRenderer::Initialize: Getting DXGI objects");
     IDXGIDevice *pDXGIDevice = nullptr;
-    hr =
-        m_pDevice->QueryInterface(__uuidof(IDXGIDevice), (void **)&pDXGIDevice);
-    if (FAILED(hr) || !pDXGIDevice) {
-      LogMsg("QueryInterface IDXGIDevice failed");
-      return false;
-    }
+    m_pDevice->QueryInterface(__uuidof(IDXGIDevice), (void **)&pDXGIDevice);
 
     IDXGIAdapter *pAdapter = nullptr;
-    hr = pDXGIDevice->GetAdapter(&pAdapter);
-    if (FAILED(hr) || !pAdapter) {
-      LogMsg("GetAdapter failed");
-      return false;
-    }
+    pDXGIDevice->GetAdapter(&pAdapter);
 
     IDXGIFactory2 *pFactory = nullptr;
-    hr = pAdapter->GetParent(__uuidof(IDXGIFactory2), (void **)&pFactory);
-    if (FAILED(hr) || !pFactory) {
-      LogMsg("GetParent IDXGIFactory2 failed");
-      return false;
-    }
+    pAdapter->GetParent(__uuidof(IDXGIFactory2), (void **)&pFactory);
 
     DXGI_SWAP_CHAIN_DESC1 swapDesc = {};
     swapDesc.Width = width;
@@ -80,10 +71,8 @@ public:
     swapDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapDesc.BufferCount = 2;
     swapDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-    swapDesc.AlphaMode =
-        DXGI_ALPHA_MODE_IGNORE; // Changed to IGNORE for opaque WS_POPUP
+    swapDesc.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 
-    LogMsg("D2DRenderer::Initialize: Calling CreateSwapChainForHwnd");
     hr = pFactory->CreateSwapChainForHwnd(m_pDevice, m_hwnd, &swapDesc, nullptr,
                                           nullptr, &m_pSwapChain);
 
@@ -91,113 +80,147 @@ public:
     pAdapter->Release();
     pDXGIDevice->Release();
 
-    if (FAILED(hr)) {
-      LogMsg("CreateSwapChainForHwnd failed: " +
-             std::to_string((unsigned int)hr));
+    if (FAILED(hr))
       return false;
-    }
 
-    LogMsg("D2DRenderer::Initialize: Calling D2D1CreateFactory");
-    hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &m_pD2DFactory);
-    if (FAILED(hr)) {
-      LogMsg("D2D1CreateFactory failed: " + std::to_string((unsigned int)hr));
+    hr = m_pDevice->QueryInterface(__uuidof(ID3D11VideoDevice),
+                                   (void **)&m_pVideoDevice);
+    if (FAILED(hr))
       return false;
-    }
 
-    LogMsg("D2DRenderer::Initialize: Calling CreateRenderTarget");
-    CreateRenderTarget();
-    LogMsg("D2DRenderer::Initialize: Success");
+    hr = m_pContext->QueryInterface(__uuidof(ID3D11VideoContext),
+                                    (void **)&m_pVideoContext);
+    if (FAILED(hr))
+      return false;
+
     return true;
-  }
-
-  void CreateRenderTarget() {
-    IDXGISurface *pBackBuffer = nullptr;
-    m_pSwapChain->GetBuffer(0, __uuidof(IDXGISurface), (void **)&pBackBuffer);
-
-    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(
-        D2D1_RENDER_TARGET_TYPE_DEFAULT,
-        D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_PREMULTIPLIED));
-
-    m_pD2DFactory->CreateDxgiSurfaceRenderTarget(pBackBuffer, &props,
-                                                 &m_pRenderTarget);
-    pBackBuffer->Release();
   }
 
   void Resize(int width, int height) {
     if (!m_pSwapChain)
       return;
-    if (m_pRenderTarget) {
-      m_pRenderTarget->Release();
-      m_pRenderTarget = nullptr;
+    if (m_pOutputView) {
+      m_pOutputView->Release();
+      m_pOutputView = nullptr;
     }
     m_pSwapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
-    CreateRenderTarget();
   }
 
-  void RenderFrame(const BYTE *pData, UINT width, UINT height, DWORD cbLength) {
-    if (!m_pRenderTarget)
+  void RenderFrame(ID3D11Texture2D *pTexture, UINT width, UINT height) {
+    if (!m_pVideoDevice || !m_pVideoContext || !pTexture)
       return;
 
-    if (!m_pBitmap || m_videoWidth != width || m_videoHeight != height) {
-      if (m_pBitmap)
-        m_pBitmap->Release();
-      m_pBitmap = nullptr;
+    if (!m_pVideoProcessor || m_videoWidth != width ||
+        m_videoHeight != height) {
+      if (m_pVideoProcessor) {
+        m_pVideoProcessor->Release();
+        m_pVideoProcessor = nullptr;
+      }
+      if (m_pVideoEnum) {
+        m_pVideoEnum->Release();
+        m_pVideoEnum = nullptr;
+      }
+      if (m_pOutputView) {
+        m_pOutputView->Release();
+        m_pOutputView = nullptr;
+      }
 
-      D2D1_BITMAP_PROPERTIES props = {};
-      props.pixelFormat.format = DXGI_FORMAT_B8G8R8A8_UNORM;
-      props.pixelFormat.alphaMode = D2D1_ALPHA_MODE_IGNORE;
-      props.dpiX = 96.0f;
-      props.dpiY = 96.0f;
+      D3D11_VIDEO_PROCESSOR_CONTENT_DESC desc = {};
+      desc.InputFrameFormat = D3D11_VIDEO_FRAME_FORMAT_PROGRESSIVE;
+      desc.InputWidth = width;
+      desc.InputHeight = height;
 
-      UINT32 pitch = cbLength / height;
-      m_pRenderTarget->CreateBitmap(D2D1::SizeU(width, height), pData, pitch,
-                                    &props, &m_pBitmap);
+      DXGI_SWAP_CHAIN_DESC1 swapDesc;
+      m_pSwapChain->GetDesc1(&swapDesc);
+      desc.OutputWidth = swapDesc.Width;
+      desc.OutputHeight = swapDesc.Height;
+      desc.Usage = D3D11_VIDEO_USAGE_PLAYBACK_NORMAL;
+
+      m_pVideoDevice->CreateVideoProcessorEnumerator(&desc, &m_pVideoEnum);
+      m_pVideoDevice->CreateVideoProcessor(m_pVideoEnum, 0, &m_pVideoProcessor);
+
       m_videoWidth = width;
       m_videoHeight = height;
-    } else {
-      UINT32 pitch = cbLength / height;
-      D2D1_RECT_U destRect = D2D1::RectU(0, 0, width, height);
-      m_pBitmap->CopyFromMemory(&destRect, pData, pitch);
     }
 
-    m_pRenderTarget->BeginDraw();
-    m_pRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::Black));
+    if (!m_pOutputView) {
+      ID3D11Texture2D *pBackBuffer = nullptr;
+      m_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D),
+                              (void **)&pBackBuffer);
 
-    D2D1_SIZE_F rtSize = m_pRenderTarget->GetSize();
+      D3D11_VIDEO_PROCESSOR_OUTPUT_VIEW_DESC outDesc = {};
+      outDesc.ViewDimension = D3D11_VPOV_DIMENSION_TEXTURE2D;
+      m_pVideoDevice->CreateVideoProcessorOutputView(pBackBuffer, m_pVideoEnum,
+                                                     &outDesc, &m_pOutputView);
+      pBackBuffer->Release();
+    }
+
+    ID3D11VideoProcessorInputView *pInputView = nullptr;
+    D3D11_VIDEO_PROCESSOR_INPUT_VIEW_DESC inDesc = {};
+    inDesc.FourCC = 0;
+    inDesc.ViewDimension = D3D11_VPIV_DIMENSION_TEXTURE2D;
+
+    HRESULT hr = m_pVideoDevice->CreateVideoProcessorInputView(
+        pTexture, m_pVideoEnum, &inDesc, &pInputView);
+    if (FAILED(hr))
+      return;
+
+    D3D11_VIDEO_COLOR bgColor = {};
+    bgColor.RGBA.A = 1.0f;
+    m_pVideoContext->VideoProcessorSetOutputBackgroundColor(m_pVideoProcessor,
+                                                            FALSE, &bgColor);
+
+    DXGI_SWAP_CHAIN_DESC1 swapDesc;
+    m_pSwapChain->GetDesc1(&swapDesc);
     float srcAspect = (float)width / height;
-    float dstAspect = rtSize.width / rtSize.height;
+    float dstAspect = (float)swapDesc.Width / swapDesc.Height;
 
-    D2D1_RECT_F destRect = D2D1::RectF(0, 0, rtSize.width, rtSize.height);
-    D2D1_RECT_F srcRect = D2D1::RectF(0, 0, (float)width, (float)height);
-
+    RECT destRect = {0, 0, (LONG)swapDesc.Width, (LONG)swapDesc.Height};
     if (srcAspect > dstAspect) {
-      float visibleWidth = height * dstAspect;
-      float margin = (width - visibleWidth) / 2.0f;
-      srcRect.left = margin;
-      srcRect.right = width - margin;
+      LONG visibleWidth = (LONG)(swapDesc.Height * srcAspect);
+      LONG margin = (swapDesc.Width - visibleWidth) / 2;
+      destRect.left = margin;
+      destRect.right = swapDesc.Width - margin;
     } else if (srcAspect < dstAspect) {
-      float visibleHeight = width / dstAspect;
-      float margin = (height - visibleHeight) / 2.0f;
-      srcRect.top = margin;
-      srcRect.bottom = height - margin;
+      LONG visibleHeight = (LONG)(swapDesc.Width / srcAspect);
+      LONG margin = (swapDesc.Height - visibleHeight) / 2;
+      destRect.top = margin;
+      destRect.bottom = swapDesc.Height - margin;
     }
+    m_pVideoContext->VideoProcessorSetStreamDestRect(m_pVideoProcessor, 0, TRUE,
+                                                     &destRect);
 
-    m_pRenderTarget->DrawBitmap(m_pBitmap, destRect, 1.0f,
-                                D2D1_BITMAP_INTERPOLATION_MODE_LINEAR,
-                                &srcRect);
+    D3D11_VIDEO_PROCESSOR_STREAM stream = {};
+    stream.Enable = TRUE;
+    stream.pInputSurface = pInputView;
 
-    m_pRenderTarget->EndDraw();
+    m_pVideoContext->VideoProcessorBlt(m_pVideoProcessor, m_pOutputView, 0, 1,
+                                       &stream);
+
+    pInputView->Release();
     m_pSwapChain->Present(1, 0); // VSYNC
   }
 
   void Cleanup() {
-    if (m_pBitmap) {
-      m_pBitmap->Release();
-      m_pBitmap = nullptr;
+    if (m_pOutputView) {
+      m_pOutputView->Release();
+      m_pOutputView = nullptr;
     }
-    if (m_pRenderTarget) {
-      m_pRenderTarget->Release();
-      m_pRenderTarget = nullptr;
+    if (m_pVideoProcessor) {
+      m_pVideoProcessor->Release();
+      m_pVideoProcessor = nullptr;
+    }
+    if (m_pVideoEnum) {
+      m_pVideoEnum->Release();
+      m_pVideoEnum = nullptr;
+    }
+    if (m_pVideoContext) {
+      m_pVideoContext->Release();
+      m_pVideoContext = nullptr;
+    }
+    if (m_pVideoDevice) {
+      m_pVideoDevice->Release();
+      m_pVideoDevice = nullptr;
     }
     if (m_pSwapChain) {
       m_pSwapChain->Release();
@@ -211,10 +234,6 @@ public:
       m_pDevice->Release();
       m_pDevice = nullptr;
     }
-    if (m_pD2DFactory) {
-      m_pD2DFactory->Release();
-      m_pD2DFactory = nullptr;
-    }
   }
 
 private:
@@ -222,18 +241,20 @@ private:
   ID3D11Device *m_pDevice;
   ID3D11DeviceContext *m_pContext;
   IDXGISwapChain1 *m_pSwapChain;
-  ID2D1RenderTarget *m_pRenderTarget;
-  ID2D1Bitmap *m_pBitmap;
+  ID3D11VideoDevice *m_pVideoDevice;
+  ID3D11VideoContext *m_pVideoContext;
+  ID3D11VideoProcessorEnumerator *m_pVideoEnum;
+  ID3D11VideoProcessor *m_pVideoProcessor;
+  ID3D11VideoProcessorOutputView *m_pOutputView;
   UINT m_videoWidth;
   UINT m_videoHeight;
-  ID2D1Factory *m_pD2DFactory;
 };
 
 // Globals
 struct MonitorInstance {
   HWND hwnd;
   VideoPlayer *player;
-  D2DRenderer *renderer;
+  D3DRenderer *renderer;
   RECT rect;
 };
 
@@ -434,7 +455,7 @@ BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor,
     }
 
     mon.player = new VideoPlayer();
-    mon.renderer = new D2DRenderer(mon.hwnd);
+    mon.renderer = new D3DRenderer(mon.hwnd);
 
     // Patch the userdata properly now that we have allocated the objects
     g_Monitors.push_back(mon);
@@ -442,7 +463,7 @@ BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor,
     MonitorInstance &refMon = g_Monitors.back();
 
     if (refMon.renderer->Initialize(width, height)) {
-      if (SUCCEEDED(refMon.player->Initialize())) {
+      if (SUCCEEDED(refMon.player->Initialize(refMon.renderer->GetDevice()))) {
         PostMessage(refMon.hwnd, WM_USER_INIT_VIDEO, 0, 0);
       }
     } else {
@@ -536,14 +557,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
       }
 
       mon.player = new VideoPlayer();
-      mon.renderer = new D2DRenderer(mon.hwnd);
+      mon.renderer = new D3DRenderer(mon.hwnd);
 
       g_Monitors.push_back(mon);
       SetWindowLongPtr(mon.hwnd, GWLP_USERDATA, (LONG_PTR)&g_Monitors[0]);
 
       if (g_Monitors[0].renderer->Initialize(screenWidth, screenHeight)) {
-        LogMsg("Span mode D2D Renderer initialized.");
-        if (SUCCEEDED(g_Monitors[0].player->Initialize())) {
+        LogMsg("Span mode D3D Renderer initialized.");
+        if (SUCCEEDED(g_Monitors[0].player->Initialize(
+                g_Monitors[0].renderer->GetDevice()))) {
           LogMsg("Span mode player initialized. Posting WM_USER_INIT_VIDEO.");
           PostMessage(mon.hwnd, WM_USER_INIT_VIDEO, 0, 0);
         } else {
@@ -581,14 +603,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     bool frameRendered = false;
     for (auto &mon : g_Monitors) {
       if (mon.player && mon.renderer) {
-        BYTE *pData = NULL;
-        DWORD cbLength = 0;
+        ID3D11Texture2D *pTexture = NULL;
         UINT32 width = 0, height = 0;
-        HRESULT hrFrame =
-            mon.player->GetNextFrame(&pData, &cbLength, &width, &height);
-        if (hrFrame == S_OK && pData) {
-          mon.renderer->RenderFrame(pData, width, height, cbLength);
+        HRESULT hrFrame = mon.player->GetNextFrame(&pTexture, &width, &height);
+        if (hrFrame == S_OK && pTexture) {
+          mon.renderer->RenderFrame(pTexture, width, height);
           mon.player->UnlockFrame();
+          pTexture->Release();
           frameRendered = true;
         }
       }

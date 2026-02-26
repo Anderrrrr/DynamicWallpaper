@@ -3,11 +3,6 @@
 #include <shellapi.h>
 #include <shlwapi.h>
 #include <d3d11.h>
-// clang-format off
-#include <windows.h>
-#include <shellapi.h>
-#include <shlwapi.h>
-#include <d3d11.h>
 #include <dxgi1_2.h>
 // clang-format on
 #include <atomic>
@@ -367,6 +362,36 @@ void MonitorThread() {
   }
 }
 
+// Dedicated render thread — owns the Present(1,0) vsync cadence.
+// The main thread only runs GetMessage so it never competes with vsync.
+void RenderThread() {
+  while (g_bRunning) {
+    bool anyFrame = false;
+    for (auto &mon : g_Monitors) {
+      if (!mon.player || !mon.renderer)
+        continue;
+
+      ID3D11Texture2D *pTexture = nullptr;
+      UINT32 w = 0, h = 0;
+      HRESULT hr = mon.player->GetNextFrame(&pTexture, &w, &h);
+      if (hr == S_OK && pTexture) {
+        mon.renderer->RenderFrame(pTexture, w,
+                                  h); // internally calls Present(1,0)
+        mon.player->UnlockFrame();
+        pTexture->Release();
+        anyFrame = true;
+      }
+    }
+
+    // No frame was ready yet — yield briefly so we don't spin the CPU.
+    // Present(1,0) in RenderFrame already blocks on vsync when a frame IS
+    // ready, so we only Sleep when there is genuinely nothing to do.
+    if (!anyFrame) {
+      Sleep(1);
+    }
+  }
+}
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam,
                             LPARAM lParam) {
   MonitorInstance *pMon = nullptr;
@@ -585,42 +610,23 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine,
     return -1;
   }
 
+  // Start background threads before entering the message loop.
+  // RenderThread owns vsync cadence via Present(1,0).
+  // MonitorThread polls for fullscreen apps once per second.
+  std::thread renderThread(RenderThread);
   std::thread monitorThread(MonitorThread);
 
+  // Main thread: pure blocking message pump — no rendering, no Sleep.
+  // GetMessage blocks until a message arrives, so CPU usage is ~0% here.
   MSG msg = {};
-  while (g_bRunning) {
-    bool hasMessage = false;
-    if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-      if (msg.message == WM_QUIT) {
-        g_bRunning = false;
-        break;
-      }
-      TranslateMessage(&msg);
-      DispatchMessage(&msg);
-      hasMessage = true;
-    }
-
-    bool frameRendered = false;
-    for (auto &mon : g_Monitors) {
-      if (mon.player && mon.renderer) {
-        ID3D11Texture2D *pTexture = NULL;
-        UINT32 width = 0, height = 0;
-        HRESULT hrFrame = mon.player->GetNextFrame(&pTexture, &width, &height);
-        if (hrFrame == S_OK && pTexture) {
-          mon.renderer->RenderFrame(pTexture, width, height);
-          mon.player->UnlockFrame();
-          pTexture->Release();
-          frameRendered = true;
-        }
-      }
-    }
-
-    // Sleep dynamically to yield CPU if not busy
-    if (!hasMessage && !frameRendered) {
-      Sleep(1);
-    }
+  while (GetMessage(&msg, NULL, 0, 0) > 0) {
+    TranslateMessage(&msg);
+    DispatchMessage(&msg);
   }
 
+  g_bRunning = false;
+
+  renderThread.join();
   monitorThread.join();
 
   for (auto &mon : g_Monitors) {

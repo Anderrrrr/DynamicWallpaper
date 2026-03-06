@@ -7,6 +7,7 @@
 | 功能 | 說明 |
 |------|------|
 | **GPU 硬體解碼** | 透過 Media Foundation + `IMFDXGIDeviceManager` 直接輸出 GPU 紋理，CPU 使用率 < 2% |
+| **圖形管理介面 (NEW!)** | 內建 Python Flask + PyQt6 打造的現代化毛玻璃桌面 UI，支援拖曳上傳與一鍵切換桌布影片 |
 | **桌面圖示保留** | 視窗注入 `Progman`，Z-Order 鎖定於 `SHELLDLL_DefView` 之下，不遮擋圖示 |
 | **原生拖曳選取** | 完整支援滑鼠左鍵框選桌面圖示 (Drag and Drop) |
 | **無縫循環** | 影片結束後自動 Seek 至 0 秒，無黑畫面閃爍 |
@@ -35,12 +36,28 @@
 
 ## 使用方式
 
+### 方法一：圖形化操作介面 (推薦 ⭐)
+
+1. 確認系統已安裝 **Python 3**。
+2. 開啟 PowerShell 並安裝介面相依套件：
+   ```powershell
+   cd WebUI
+   pip install -r requirements.txt
+   pip install PyQt6 PyQt6-WebEngine opencv-python
+   cd ..
+   ```
+3. 雙擊專案目錄下的 **`DynamicWallpaperUI.bat`** 即可開啟精美的桌面管理視窗！
+   - 您可以直接把影片拖曳進去上傳。
+   - 點擊「Gallery」中的影片立即切換桌布。
+
+### 方法二：透過指令列 (Command Line)
+
 ```powershell
 .\build_msvc\Release\DynamicWallpaper.exe "C:\Path\To\Your\Video.mp4"
 ```
 
 - 支援 `.mp4`、`.mkv`、`.mov` 等 Media Foundation 可解碼的格式。
-- 若未指定路徑，將嘗試在程式同目錄的上兩層尋找 `pixel-rain-traffic.3840x2160.mp4`。
+- 若未指定路徑，將嘗試尋找預設影片。
 - 關閉程式：在工作列找到 `Dynamic Wallpaper` 視窗並關閉，或在 PowerShell 按 `Ctrl+C`。
 
 ## 已知限制

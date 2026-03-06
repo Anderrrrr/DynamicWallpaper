@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Wallpaper UI</title>
+    <!-- Modern Font: Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="logo"></div>
+                <h1>Dynamic<br>Wallpaper</h1>
+            </div>
+            
+            <nav class="nav-links">
+                <a href="#" class="active" id="nav-gallery">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                    Gallery
+                </a>
+                <a href="#" id="nav-upload">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    Upload Video
+                </a>
+                <a href="#" id="nav-settings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    Settings
+                </a>
+            </nav>
+            
+            <div class="status-indicator">
+                <span class="status-dot"></span>
+                <span>Engine Ready</span>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Gallery View -->
+            <section id="view-gallery" class="view-section active">
+                <header>
+                    <h2>Your Wallpapers</h2>
+                    <p>Select a video to instantly set it as your wallpaper.</p>
+                </header>
+                
+                <div class="video-grid" id="video-grid">
+                    <!-- Video cards will be dynamically injected here -->
+                    <div class="loading-state">
+                        <div class="spinner"></div>
+                        <p>Loading your wallpapers...</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Upload View -->
+            <section id="view-upload" class="view-section">
+                <header>
+                    <h2>Upload New Video</h2>
+                    <p>Add a new .mp4 file to your wallpaper collection.</p>
+                </header>
+                
+                <div class="upload-container">
+                    <div class="dropzone" id="dropzone">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        <h3>Drag & Drop video here</h3>
+                        <p class="subtitle">Only .mp4, .avi, .mkv, .mov are supported</p>
+                        
+                        <div class="divider">
+                            <span>OR</span>
+                        </div>
+                        
+                        <input type="file" id="file-input" accept=".mp4,.avi,.mkv,.mov" hidden>
+                        <button class="btn-primary" id="btn-browse" onclick="document.getElementById('file-input').click()">
+                            Browse Files
+                        </button>
+                    </div>
+                    
+                    <div class="upload-progress-container" id="upload-progress-container" style="display: none;">
+                        <div class="file-info">
+                            <span id="upload-filename">filename.mp4</span>
+                            <span id="upload-percentage">0%</span>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" id="progress-bar"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast">
+        <div class="toast-icon">✓</div>
+        <div class="toast-message">Wallpaper changed successfully!</div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

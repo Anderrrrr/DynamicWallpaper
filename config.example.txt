@@ -1,0 +1,5 @@
+# DynamicWallpaper 設定檔
+# 在這裡填寫影片的完整路徑，換影片只需修改這一行。
+# 支援 .mp4、.mkv、.mov 等 Media Foundation 可解碼的格式。
+
+C:\Users\ander\Videos\Girl-Standing-In-Meadow.3840X2160.mp4

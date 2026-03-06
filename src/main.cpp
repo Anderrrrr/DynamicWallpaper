@@ -383,13 +383,18 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int) {
 
   try {
     HWND progman = GetDesktopLayer();
-    g_inst.hwnd = CreateWindowEx(
-        WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME, "Dynamic Wallpaper",
-        WS_POPUP | WS_VISIBLE, X, Y, W, H, NULL, NULL, hInst, nullptr);
+
+    // 建立視窗時先隱藏 (不加 WS_VISIBLE)，避免出現在工作列或閃爍
+    g_inst.hwnd = CreateWindowEx(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+                                 CLASS_NAME, "Dynamic Wallpaper", WS_POPUP, X,
+                                 Y, W, H, NULL, NULL, hInst, nullptr);
+
     if (!g_inst.hwnd) {
       CoUninitialize();
       return -1;
     }
+
+    // 注入桌面層
     if (progman && g_hwndDefView) {
       SetParent(g_inst.hwnd, progman);
       SetWindowPos(g_inst.hwnd, g_hwndDefView, 0, 0, 0, 0,
@@ -398,6 +403,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int) {
       SetWindowPos(g_inst.hwnd, HWND_BOTTOM, 0, 0, 0, 0,
                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
+
+    // 注入並排好 Z-Order 後再顯示
+    ShowWindow(g_inst.hwnd, SW_SHOWNOACTIVATE);
 
     g_inst.renderer = new D3DRenderer(g_inst.hwnd);
     g_inst.player = new VideoPlayer();

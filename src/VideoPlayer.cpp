@@ -1,9 +1,11 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include "VideoPlayer.h"
 #include <propvarutil.h>
 #include <shlwapi.h>
 
-#include <timeapi.h>
+extern void LogMsg(const std::string &msg);
 
+#include <timeapi.h>
 #pragma comment(lib, "winmm.lib")
 #pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "mf.lib")
@@ -12,7 +14,6 @@
 #pragma comment(lib, "mfreadwrite.lib")
 #pragma comment(lib, "Propsys.lib")
 
-// IID: {9B7E4E00-342C-4106-A19F-4F2704F689F0}
 static const GUID IID_ID3D11Multithread_Local = {
     0x9B7E4E00,
     0x342C,
@@ -26,16 +27,11 @@ struct ID3D11Multithread_Local : public IUnknown {
 };
 
 template <class T> void SafeRelease(T **ppT) {
-
   if (*ppT) {
     (*ppT)->Release();
     *ppT = NULL;
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SourceReaderCallback Implementation
-// ─────────────────────────────────────────────────────────────────────────────
 
 STDMETHODIMP VideoPlayer::SourceReaderCallback::OnReadSample(
     HRESULT hrStatus, DWORD dwStreamIndex, DWORD dwStreamFlags,
@@ -44,15 +40,14 @@ STDMETHODIMP VideoPlayer::SourceReaderCallback::OnReadSample(
                                 llTimestamp, pSample);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// VideoPlayer Implementation
-// ─────────────────────────────────────────────────────────────────────────────
-
 VideoPlayer::VideoPlayer()
     : m_pReader(NULL), m_isPlaying(false), m_width(0), m_height(0),
       m_playbackStartHns(0), m_pCurrentSample(NULL), m_pLockedBuffer(NULL),
       m_currentSamplePts(0), m_pDevice(NULL), m_pContext(NULL),
-      m_pDeviceManager(NULL), m_resetToken(0), m_pendingReads(0) {
+      m_pDeviceManager(NULL), m_resetToken(0), m_pendingReads(0),
+      m_pCurrentGPUTexture(NULL), m_currentSubresourceIndex(0),
+      m_pStagingTexture(NULL), m_firstFrameQpc(0), m_firstFramePts(0),
+      m_hnsFrameDuration(333333) {
   m_pendingRewind = false;
   m_qpcStart = 0;
   m_pCallback = new SourceReaderCallback(this);
@@ -66,39 +61,28 @@ VideoPlayer::~VideoPlayer() {
 
 HRESULT VideoPlayer::Initialize(ID3D11Device *pDevice) {
   HRESULT hr = MFStartup(MF_VERSION);
-  if (FAILED(hr)) {
+  if (FAILED(hr))
     return hr;
-  }
-
   m_pDevice = pDevice;
   m_pDevice->AddRef();
   m_pDevice->GetImmediateContext(&m_pContext);
-
-  // Enable D3D11 multithread protection
   ID3D11Multithread_Local *pMT = nullptr;
   if (SUCCEEDED(pDevice->QueryInterface(IID_ID3D11Multithread_Local,
                                         (void **)&pMT))) {
     pMT->SetMultithreadProtected(TRUE);
     pMT->Release();
   }
-
-  // Create DXGI device manager so MF can initialize its pipeline
   hr = MFCreateDXGIDeviceManager(&m_resetToken, &m_pDeviceManager);
-  if (FAILED(hr)) {
+  if (FAILED(hr))
     return hr;
-  }
-
-  hr = m_pDeviceManager->ResetDevice(pDevice, m_resetToken);
-  if (FAILED(hr)) {
-    return hr;
-  }
-
-  return S_OK;
+  return m_pDeviceManager->ResetDevice(pDevice, m_resetToken);
 }
 
 void VideoPlayer::Shutdown() {
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
   SafeRelease(&m_pCurrentSample);
+  SafeRelease(&m_pCurrentGPUTexture);
+  SafeRelease(&m_pStagingTexture); // release our owned staging texture
   if (m_pLockedBuffer) {
     m_pLockedBuffer->Unlock();
     SafeRelease(&m_pLockedBuffer);
@@ -118,7 +102,6 @@ void VideoPlayer::Shutdown() {
 
 HRESULT VideoPlayer::OpenFile(const std::wstring &path) {
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
-
   SafeRelease(&m_pCurrentSample);
   while (!m_sampleQueue.empty()) {
     IMFSample *s = m_sampleQueue.front();
@@ -127,49 +110,35 @@ HRESULT VideoPlayer::OpenFile(const std::wstring &path) {
   }
   m_pendingReads = 0;
   SafeRelease(&m_pReader);
-
   IMFAttributes *pAttributes = NULL;
-  HRESULT hr = MFCreateAttributes(&pAttributes, 3);
-  if (FAILED(hr))
-    return hr;
-
-  // Provide D3D manager so MF can run the HW decoder pipeline
+  MFCreateAttributes(&pAttributes, 3);
   pAttributes->SetUnknown(MF_SOURCE_READER_D3D_MANAGER, m_pDeviceManager);
-  // Advanced video processing lets MF pick HW decoder + colour converter.
-  // Do NOT combine with MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS.
   pAttributes->SetUINT32(MF_SOURCE_READER_ENABLE_ADVANCED_VIDEO_PROCESSING,
                          TRUE);
   pAttributes->SetUnknown(MF_SOURCE_READER_ASYNC_CALLBACK, m_pCallback);
-
-  hr = MFCreateSourceReaderFromURL(path.c_str(), pAttributes, &m_pReader);
+  HRESULT hr =
+      MFCreateSourceReaderFromURL(path.c_str(), pAttributes, &m_pReader);
   SafeRelease(&pAttributes);
-  if (FAILED(hr)) {
+  if (FAILED(hr))
     return hr;
-  }
-
-  // Request BGRA (RGB32) output — MF will colour-convert for us
   IMFMediaType *pMediaType = NULL;
-  hr = MFCreateMediaType(&pMediaType);
-  if (SUCCEEDED(hr)) {
-    pMediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
-    pMediaType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
-    hr = m_pReader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM,
-                                        NULL, pMediaType);
-    SafeRelease(&pMediaType);
-    if (FAILED(hr)) {
-      return hr;
-    }
-  }
-
+  MFCreateMediaType(&pMediaType);
+  pMediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
+  pMediaType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
+  m_pReader->SetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM, NULL,
+                                 pMediaType);
+  SafeRelease(&pMediaType);
   IMFMediaType *pCurrentType = NULL;
-  hr = m_pReader->GetCurrentMediaType(MF_SOURCE_READER_FIRST_VIDEO_STREAM,
-                                      &pCurrentType);
-  if (SUCCEEDED(hr)) {
+  if (SUCCEEDED(m_pReader->GetCurrentMediaType(
+          MF_SOURCE_READER_FIRST_VIDEO_STREAM, &pCurrentType))) {
     MFGetAttributeSize(pCurrentType, MF_MT_FRAME_SIZE, &m_width, &m_height);
+    UINT32 num = 0, den = 1;
+    if (SUCCEEDED(
+            MFGetAttributeRatio(pCurrentType, MF_MT_FRAME_RATE, &num, &den)) &&
+        num > 0)
+      m_hnsFrameDuration = 10000000LL * den / num;
     SafeRelease(&pCurrentType);
   }
-
-  m_isPlaying = false;
   return S_OK;
 }
 
@@ -177,8 +146,8 @@ void VideoPlayer::Play() {
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
   if (!m_isPlaying && m_pReader) {
     m_isPlaying = true;
-    QueryPerformanceCounter((LARGE_INTEGER *)&m_qpcStart);
-    m_playbackStartHns = m_currentSamplePts;
+    m_firstFrameQpc = 0; // <-- Add this line
+    m_firstFramePts = 0; // <-- Add this line
     RequestSample();
     RequestSample();
   }
@@ -192,25 +161,21 @@ void VideoPlayer::Pause() {
 void VideoPlayer::Rewind() {
   if (!m_pReader)
     return;
-
   while (!m_sampleQueue.empty()) {
     IMFSample *s = m_sampleQueue.front();
     SafeRelease(&s);
     m_sampleQueue.pop();
   }
-
   PROPVARIANT var;
   PropVariantInit(&var);
   var.vt = VT_I8;
   var.hVal.QuadPart = 0;
   m_pReader->SetCurrentPosition(GUID_NULL, var);
   PropVariantClear(&var);
-
   SafeRelease(&m_pCurrentSample);
-  if (m_isPlaying) {
-    QueryPerformanceCounter((LARGE_INTEGER *)&m_qpcStart);
-  }
-  m_playbackStartHns = 0;
+  SafeRelease(&m_pCurrentGPUTexture);
+  m_firstFrameQpc = 0;
+  m_firstFramePts = 0;
   m_currentSamplePts = 0;
   RequestSample();
 }
@@ -218,14 +183,12 @@ void VideoPlayer::Rewind() {
 void VideoPlayer::RequestSample() {
   if (!m_isPlaying || !m_pReader)
     return;
-  const int MAX_BUFFER = 10;
-  while ((m_sampleQueue.size() + m_pendingReads) < MAX_BUFFER) {
+  while ((m_sampleQueue.size() + m_pendingReads) < 10) {
     if (SUCCEEDED(m_pReader->ReadSample(MF_SOURCE_READER_FIRST_VIDEO_STREAM, 0,
-                                        NULL, NULL, NULL, NULL))) {
+                                        NULL, NULL, NULL, NULL)))
       m_pendingReads++;
-    } else {
+    else
       break;
-    }
   }
 }
 
@@ -235,15 +198,12 @@ HRESULT VideoPlayer::OnReadSample(HRESULT hrStatus, DWORD dwStreamIndex,
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
   if (m_pendingReads > 0)
     m_pendingReads--;
-
   if (FAILED(hrStatus))
     return S_OK;
-
   if (dwStreamFlags & MF_SOURCE_READERF_ENDOFSTREAM) {
     m_pendingRewind = true;
     return S_OK;
   }
-
   if (pSample) {
     pSample->AddRef();
     m_sampleQueue.push(pSample);
@@ -252,77 +212,101 @@ HRESULT VideoPlayer::OnReadSample(HRESULT hrStatus, DWORD dwStreamIndex,
   return S_OK;
 }
 
-HRESULT VideoPlayer::GetNextFrameCPU(const BYTE **ppData, UINT32 *pRowPitch,
-                                     UINT32 *pdwWidth, UINT32 *pdwHeight) {
+HRESULT VideoPlayer::GetNextFrameGPU(ID3D11Texture2D **ppTexture,
+                                     UINT *pSubresourceIndex) {
   std::lock_guard<std::recursive_mutex> lock(m_mutex);
-
-  static bool s_logged = false;
-  if (!s_logged) {
-    s_logged = true;
-  }
-
-  if (m_pendingRewind.exchange(false)) {
+  if (m_pendingRewind.exchange(false))
     Rewind();
-    return S_FALSE;
+
+  if (m_isPlaying && m_pReader) {
+    LARGE_INTEGER qpcNow, qpcFreq;
+    QueryPerformanceFrequency(&qpcFreq);
+    int framesPopped = 0;
+    while (!m_sampleQueue.empty()) {
+      QueryPerformanceCounter(&qpcNow);
+      IMFSample *pPeek = m_sampleQueue.front();
+      LONGLONG samplePts = 0;
+      pPeek->GetSampleTime(&samplePts);
+      if (m_firstFrameQpc == 0) {
+        m_firstFrameQpc = qpcNow.QuadPart;
+        m_firstFramePts = samplePts;
+      }
+      LONGLONG elapsedHns =
+          (qpcNow.QuadPart - m_firstFrameQpc) * 10000000LL / qpcFreq.QuadPart;
+      LONGLONG relativePts = samplePts - m_firstFramePts;
+
+      if (elapsedHns - relativePts > m_hnsFrameDuration * 2) {
+        m_firstFrameQpc = qpcNow.QuadPart;
+        m_firstFramePts = samplePts;
+        elapsedHns = 0;
+        relativePts = 0;
+      }
+
+      if (relativePts > elapsedHns)
+        break;
+
+      framesPopped++;
+      IMFSample *pChosenSample = m_sampleQueue.front();
+      m_sampleQueue.pop();
+      m_currentSamplePts = samplePts;
+
+      IMFMediaBuffer *pBuffer = nullptr;
+      if (SUCCEEDED(pChosenSample->GetBufferByIndex(0, &pBuffer))) {
+        IMFDXGIBuffer *pDXGIBuffer = nullptr;
+        if (SUCCEEDED(pBuffer->QueryInterface(__uuidof(IMFDXGIBuffer),
+                                              (void **)&pDXGIBuffer))) {
+          ID3D11Texture2D *pMFTex = nullptr;
+          UINT subres = 0;
+          pDXGIBuffer->GetSubresourceIndex(&subres);
+          if (SUCCEEDED(pDXGIBuffer->GetResource(__uuidof(ID3D11Texture2D),
+                                                 (void **)&pMFTex)) &&
+              pMFTex) {
+            D3D11_TEXTURE2D_DESC mfDesc;
+            pMFTex->GetDesc(&mfDesc);
+
+            // (Re)create our staging texture if size or format changed
+            if (!m_pStagingTexture) {
+              D3D11_TEXTURE2D_DESC stagDesc = {};
+              stagDesc.Width = mfDesc.Width;
+              stagDesc.Height = mfDesc.Height;
+              stagDesc.MipLevels = 1;
+              stagDesc.ArraySize = 1;
+              stagDesc.Format = mfDesc.Format;
+              stagDesc.SampleDesc.Count = 1;
+              stagDesc.Usage = D3D11_USAGE_DEFAULT;
+              stagDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+              m_pDevice->CreateTexture2D(&stagDesc, nullptr,
+                                         &m_pStagingTexture);
+            }
+
+            if (m_pStagingTexture) {
+              // Blit this slice into our owned texture (subresource 0)
+              UINT srcSub = D3D11CalcSubresource(0, subres, mfDesc.MipLevels);
+              m_pContext->CopySubresourceRegion(
+                  m_pStagingTexture, 0, // dst: our texture, slice 0
+                  0, 0, 0,              // dst offset
+                  pMFTex, srcSub,       // src: MF pool texture + slice
+                  nullptr);             // full region
+            }
+            pMFTex->Release(); // release MF's texture immediately
+          }
+          pDXGIBuffer->Release();
+        }
+        pBuffer->Release();
+      }
+      pChosenSample->Release();
+      RequestSample();
+    }
   }
 
-  if (!m_isPlaying || !m_pReader || m_sampleQueue.empty()) {
-    return S_FALSE;
+  // Return our owned staging texture (subresource 0), not MF's shared pool
+  // texture. m_pCurrentGPUTexture is no longer stored long-term; staging
+  // texture holds the frame.
+  if (m_pStagingTexture) {
+    m_pStagingTexture->AddRef();
+    *ppTexture = m_pStagingTexture;
+    *pSubresourceIndex = 0;
+    return S_OK;
   }
-
-  IMFSample *pChosenSample = m_sampleQueue.front();
-  m_sampleQueue.pop();
-
-  if (!pChosenSample) {
-    return S_FALSE;
-  }
-
-  SafeRelease(&m_pCurrentSample);
-  m_pCurrentSample = pChosenSample;
-  m_currentSamplePts = 0;
-  m_pCurrentSample->GetSampleTime(&m_currentSamplePts);
-
-  RequestSample();
-
-  IMFMediaBuffer *pBuffer = nullptr;
-  HRESULT hr = m_pCurrentSample->ConvertToContiguousBuffer(&pBuffer);
-  if (FAILED(hr))
-    return hr;
-
-  BYTE *pSrc = nullptr;
-  DWORD cbMaxLength = 0, cbCurrentLength = 0;
-  hr = pBuffer->Lock(&pSrc, &cbMaxLength, &cbCurrentLength);
-  if (FAILED(hr)) {
-    pBuffer->Release();
-    return hr;
-  }
-
-  LONG pitch = (LONG)(m_width * 4);
-  MFGetStrideForBitmapInfoHeader(MFVideoFormat_RGB32.Data1, m_width, &pitch);
-  UINT absPitch = (UINT)(pitch < 0 ? -pitch : pitch);
-
-  // 複製到內部 buffer
-  size_t needed = (size_t)absPitch * m_height;
-  if (m_frameCopyBuf.size() < needed)
-    m_frameCopyBuf.resize(needed);
-
-  // Safeguard against over-reading the source buffer
-  size_t copySize = (cbCurrentLength < needed) ? cbCurrentLength : needed;
-  memcpy(m_frameCopyBuf.data(), pSrc, copySize);
-
-  // 立刻 unlock，不再需要 MF buffer
-  pBuffer->Unlock();
-  pBuffer->Release();
-  SafeRelease(&m_pCurrentSample); // sample 也可以立刻放掉
-
-  *ppData = m_frameCopyBuf.data();
-  *pRowPitch = absPitch;
-  *pdwWidth = m_width;
-  *pdwHeight = m_height;
-
-  return S_OK;
-}
-
-void VideoPlayer::UnlockFrame() {
-  // buffer 已在 GetNextFrameCPU 裡 unlock，這裡什麼都不用做
+  return S_FALSE;
 }

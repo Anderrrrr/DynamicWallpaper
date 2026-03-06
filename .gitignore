@@ -1,5 +1,20 @@
-
-VideoPlayer.obj
-main.obj
-debug_log.txt
+# Build artifacts
+build_msvc/
 *.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# Logs
+*.log
+wallpaper_log.txt
+debug_log.txt
+
+# Videos (too large for repo)
+*.mp4
+*.mkv
+
+# Screenshots / temp
+screenshot.png
+lively/

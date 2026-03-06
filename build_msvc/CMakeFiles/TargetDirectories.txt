@@ -1,3 +1,0 @@
-C:/DynamicWallpaperSource/build_msvc/CMakeFiles/DynamicWallpaper.dir
-C:/DynamicWallpaperSource/build_msvc/CMakeFiles/ALL_BUILD.dir
-C:/DynamicWallpaperSource/build_msvc/CMakeFiles/ZERO_CHECK.dir

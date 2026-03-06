@@ -1,31 +1,37 @@
-﻿// clang-format off
+﻿#define _CRT_SECURE_NO_WARNINGS
+// clang-format off
 #include <windows.h>
 #include <shellapi.h>
 #include <shlwapi.h>
 #include <d3d11.h>
+#include <d3dcompiler.h>
 #include <dxgi1_2.h>
 // clang-format on
 #include <atomic>
-
+#include <cstdio>
 #include <string>
 #include <thread>
 #include <vector>
 
 #include "VideoPlayer.h"
-#include <sstream>
+
+void LogMsg(const std::string &msg) {
+  printf("%s\n", msg.c_str());
+  fflush(stdout);
+  OutputDebugStringA((msg + "\n").c_str());
+}
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "shlwapi.lib")
 
 // ── D3DRenderer ──────────────────────────────────────────────────────────────
-// Minimal: just swap chain + CopyResource + Present(0,0).
-// No VideoProcessor, no Resize, no OutputView caching.
 class D3DRenderer {
 public:
   D3DRenderer(HWND hwnd)
       : m_hwnd(hwnd), m_pDevice(nullptr), m_pContext(nullptr),
-        m_pSwapChain(nullptr), m_pStagingTex(nullptr) {}
+        m_pSwapChain(nullptr), m_pVS(nullptr), m_pPS(nullptr),
+        m_pSampler(nullptr) {}
   ~D3DRenderer() { Cleanup(); }
 
   ID3D11Device *GetDevice() const { return m_pDevice; }
@@ -37,9 +43,8 @@ public:
         D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr,
                           D3D11_CREATE_DEVICE_BGRA_SUPPORT, featureLevels, 2,
                           D3D11_SDK_VERSION, &m_pDevice, nullptr, &m_pContext);
-    if (FAILED(hr)) {
+    if (FAILED(hr))
       return false;
-    }
 
     IDXGIDevice *pDXGIDevice = nullptr;
     IDXGIAdapter *pAdapter = nullptr;
@@ -63,64 +68,128 @@ public:
     pFactory->Release();
     pAdapter->Release();
     pDXGIDevice->Release();
+    if (FAILED(hr))
+      return false;
+
+    const char *shaderSrc = "struct VOut {\n"
+                            "    float4 pos : SV_Position;\n"
+                            "    float2 uv : TEXCOORD0;\n"
+                            "};\n"
+                            "VOut VS(uint id : SV_VertexID) {\n"
+                            "    VOut output;\n"
+                            "    output.uv = float2((id << 1) & 2, id & 2);\n"
+                            "    output.pos = float4(output.uv * float2(2, -2) "
+                            "+ float2(-1, 1), 0, 1);\n"
+                            "    return output;\n"
+                            "}\n"
+                            "Texture2D tex : register(t0);\n"
+                            "SamplerState sam : register(s0);\n"
+                            "float4 PS(VOut input) : SV_Target {\n"
+                            "    return tex.Sample(sam, input.uv);\n"
+                            "}\n";
+
+    ID3DBlob *vsBlob = nullptr, *psBlob = nullptr, *errBlob = nullptr;
+    hr = D3DCompile(shaderSrc, strlen(shaderSrc), nullptr, nullptr, nullptr,
+                    "VS", "vs_4_0", 0, 0, &vsBlob, &errBlob);
     if (FAILED(hr)) {
+      if (errBlob)
+        errBlob->Release();
       return false;
     }
+    m_pDevice->CreateVertexShader(vsBlob->GetBufferPointer(),
+                                  vsBlob->GetBufferSize(), nullptr, &m_pVS);
+    vsBlob->Release();
 
-    // Pre-create textures for CPU upload
-    D3D11_TEXTURE2D_DESC stagingDesc = {};
-    stagingDesc.Width = width;
-    stagingDesc.Height = height;
-    stagingDesc.MipLevels = 1;
-    stagingDesc.ArraySize = 1;
-    stagingDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    stagingDesc.SampleDesc.Count = 1;
-    stagingDesc.Usage = D3D11_USAGE_DYNAMIC; // DYNAMIC for efficient CPU upload
-    stagingDesc.BindFlags = D3D11_BIND_SHADER_RESOURCE; // Required for DYNAMIC
-    stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-    hr = m_pDevice->CreateTexture2D(&stagingDesc, nullptr, &m_pStagingTex);
+    hr = D3DCompile(shaderSrc, strlen(shaderSrc), nullptr, nullptr, nullptr,
+                    "PS", "ps_4_0", 0, 0, &psBlob, &errBlob);
+    if (FAILED(hr)) {
+      if (errBlob)
+        errBlob->Release();
+      return false;
+    }
+    m_pDevice->CreatePixelShader(psBlob->GetBufferPointer(),
+                                 psBlob->GetBufferSize(), nullptr, &m_pPS);
+    psBlob->Release();
+
+    D3D11_SAMPLER_DESC sampDesc = {};
+    sampDesc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sampDesc.AddressU = sampDesc.AddressV = sampDesc.AddressW =
+        D3D11_TEXTURE_ADDRESS_CLAMP;
+    sampDesc.ComparisonFunc = D3D11_COMPARISON_NEVER;
+    m_pDevice->CreateSamplerState(&sampDesc, &m_pSampler);
+
+    m_viewport.Width = (FLOAT)width;
+    m_viewport.Height = (FLOAT)height;
+    m_viewport.MinDepth = 0.0f;
+    m_viewport.MaxDepth = 1.0f;
+    m_viewport.TopLeftX = m_viewport.TopLeftY = 0;
 
     return true;
   }
 
-  void RenderFrame(const BYTE *pSrcData, UINT srcRowPitch, UINT width,
-                   UINT height) {
-    if (!m_pSwapChain || !pSrcData || !m_pStagingTex)
+  void RenderFrame(ID3D11Texture2D *pTexture, UINT subresourceIndex) {
+    if (!m_pSwapChain || !pTexture)
       return;
-
-    // 1. Map staging with DISCARD, memcpy
-    D3D11_MAPPED_SUBRESOURCE mapped = {};
-    HRESULT hr =
-        m_pContext->Map(m_pStagingTex, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped);
-    if (FAILED(hr)) {
-      return;
-    }
-
-    const UINT rowBytes = width * 4;
-    for (UINT row = 0; row < height; row++) {
-      memcpy((BYTE *)mapped.pData + row * mapped.RowPitch,
-             pSrcData + row * srcRowPitch, rowBytes);
-    }
-    m_pContext->Unmap(m_pStagingTex, 0);
-
-    // 2. staging (DYNAMIC) → backbuffer
     ID3D11Texture2D *pBack = nullptr;
-    hr = m_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void **)&pBack);
-    if (SUCCEEDED(hr)) {
-      m_pContext->CopyResource(pBack, m_pStagingTex); // Direct copy
-      pBack->Release();
+    if (FAILED(m_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D),
+                                       (void **)&pBack)))
+      return;
+
+    ID3D11RenderTargetView *pRTV = nullptr;
+    m_pDevice->CreateRenderTargetView(pBack, nullptr, &pRTV);
+    pBack->Release();
+
+    D3D11_TEXTURE2D_DESC texDesc;
+    pTexture->GetDesc(&texDesc);
+    ID3D11ShaderResourceView *pSRV = nullptr;
+    if (texDesc.ArraySize > 1) {
+      D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+      srvDesc.Format = texDesc.Format;
+      srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+      srvDesc.Texture2DArray.MostDetailedMip = 0;
+      srvDesc.Texture2DArray.MipLevels = 1;
+      srvDesc.Texture2DArray.FirstArraySlice = subresourceIndex;
+      srvDesc.Texture2DArray.ArraySize = 1;
+      m_pDevice->CreateShaderResourceView(pTexture, &srvDesc, &pSRV);
+    } else {
+      D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+      srvDesc.Format = texDesc.Format;
+      srvDesc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+      srvDesc.Texture2D.MostDetailedMip = 0;
+      srvDesc.Texture2D.MipLevels = 1;
+      m_pDevice->CreateShaderResourceView(pTexture, &srvDesc, &pSRV);
     }
 
-    hr = m_pSwapChain->Present(0, 0);
-    if (hr == DXGI_STATUS_OCCLUDED) {
-      Sleep(33); // window hidden, throttle
+    if (pSRV) {
+      m_pContext->OMSetRenderTargets(1, &pRTV, nullptr);
+      m_pContext->RSSetViewports(1, &m_viewport);
+      m_pContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+      m_pContext->VSSetShader(m_pVS, nullptr, 0);
+      m_pContext->PSSetShader(m_pPS, nullptr, 0);
+      m_pContext->PSSetShaderResources(0, 1, &pSRV);
+      m_pContext->PSSetSamplers(0, 1, &m_pSampler);
+      m_pContext->Draw(3, 0);
+      ID3D11ShaderResourceView *nullSRV[1] = {nullptr};
+      m_pContext->PSSetShaderResources(0, 1, nullSRV);
+      m_pContext->OMSetRenderTargets(0, nullptr, nullptr);
+      pSRV->Release();
     }
+    pRTV->Release();
+    m_pSwapChain->Present(1, 0);
   }
 
   void Cleanup() {
-    if (m_pStagingTex) {
-      m_pStagingTex->Release();
-      m_pStagingTex = nullptr;
+    if (m_pSampler) {
+      m_pSampler->Release();
+      m_pSampler = nullptr;
+    }
+    if (m_pPS) {
+      m_pPS->Release();
+      m_pPS = nullptr;
+    }
+    if (m_pVS) {
+      m_pVS->Release();
+      m_pVS = nullptr;
     }
     if (m_pSwapChain) {
       m_pSwapChain->Release();
@@ -141,39 +210,32 @@ private:
   ID3D11Device *m_pDevice;
   ID3D11DeviceContext *m_pContext;
   IDXGISwapChain1 *m_pSwapChain;
-  ID3D11Texture2D *m_pStagingTex;
+  ID3D11VertexShader *m_pVS;
+  ID3D11PixelShader *m_pPS;
+  ID3D11SamplerState *m_pSampler;
+  D3D11_VIEWPORT m_viewport;
 };
 
-// ── Globals
-// ───────────────────────────────────────────────────────────────────
+// ── Globals ──────────────────────────────────────────────────────────────────
 struct Instance {
   HWND hwnd = nullptr;
   VideoPlayer *player = nullptr;
   D3DRenderer *renderer = nullptr;
 };
-
 static Instance g_inst;
 static std::atomic<bool> g_bRunning(true);
 static HINSTANCE g_hInstance = nullptr;
 static std::wstring g_videoPath;
-
 static const char CLASS_NAME[] = "DynamicWallpaperClass";
-#define WM_USER_INIT_VIDEO (WM_USER + 3)
-
-// ── Desktop layer helper
-// ──────────────────────────────────────────────────────
 static HWND g_hwndDefView = nullptr;
 
 static HWND GetDesktopLayer() {
   HWND progman = FindWindow("Progman", nullptr);
-  if (!progman) {
+  if (!progman)
     return nullptr;
-  }
-
   DWORD_PTR result = 0;
   SendMessageTimeout(progman, 0x052C, 0x0D, 0x01, SMTO_NORMAL, 1000, &result);
-
-  for (int i = 0; i < 20 && !g_hwndDefView; ++i) {
+  for (int i = 0; i < 10 && !g_hwndDefView; ++i) {
     g_hwndDefView = FindWindowEx(progman, NULL, "SHELLDLL_DefView", NULL);
     if (!g_hwndDefView) {
       EnumWindows(
@@ -188,50 +250,49 @@ static HWND GetDesktopLayer() {
           0);
     }
     if (!g_hwndDefView)
-      Sleep(1000);
+      Sleep(500);
   }
-
   return progman;
 }
 
-// ── Render thread helpers ──────────────────────────────────────────────────
-
 static void ProcessFrame() {
-  const BYTE *pData = nullptr;
-  UINT32 pitch = 0, w = 0, h = 0;
-  if (g_inst.player &&
-      g_inst.player->GetNextFrameCPU(&pData, &pitch, &w, &h) == S_OK && pData) {
-    g_inst.renderer->RenderFrame(pData, pitch, w, h);
-    g_inst.player->UnlockFrame();
+  ID3D11Texture2D *pTexture = nullptr;
+  UINT subresource = 0;
+  if (g_inst.player) {
+    g_inst.player->GetNextFrameGPU(&pTexture, &subresource);
+    if (pTexture) {
+      g_inst.renderer->RenderFrame(pTexture, subresource);
+      pTexture->Release();
+    }
   }
 }
 
-// QPC-paced at 60 fps. Never blocks on vsync.
 static void RenderThreadLogic() {
-  LARGE_INTEGER freq, last;
+  LARGE_INTEGER freq, last, now;
   QueryPerformanceFrequency(&freq);
   QueryPerformanceCounter(&last);
   const LONGLONG kTick = freq.QuadPart / 60;
-
   while (g_bRunning) {
-    ProcessFrame();
-
-    // Sleep until next 16.67ms boundary
-    LARGE_INTEGER now;
+    // 計算距離下一次 deadline 還剩多少時間
     QueryPerformanceCounter(&now);
     LONGLONG rem = kTick - (now.QuadPart - last.QuadPart);
     if (rem > 0) {
       LONGLONG ms = rem * 1000 / freq.QuadPart;
       if (ms > 1)
         Sleep((DWORD)(ms - 1));
+      // spin-wait 剩下的零頭
       do {
         QueryPerformanceCounter(&now);
       } while ((now.QuadPart - last.QuadPart) < kTick && g_bRunning);
     }
+    // 更新 deadline
     last.QuadPart += kTick;
+    // 如果落後超過 4 幀（例如系統繁忙），直接重置避免補幀風暴
     QueryPerformanceCounter(&now);
     if (now.QuadPart - last.QuadPart > kTick * 4)
-      last = now; // catch-up guard
+      last = now;
+    // 在等待結束後才執行這一幀，確保時序正確
+    ProcessFrame();
   }
 }
 
@@ -243,37 +304,30 @@ static void RenderThread() {
   }
 }
 
-// ── Window proc
-// ───────────────────────────────────────────────────────────────
 static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
-  switch (msg) {
-  case WM_ERASEBKGND:
-    return 1; // D3D handles background
-
-  case WM_DESTROY:
+  if (msg == WM_ERASEBKGND)
+    return 1;
+  if (msg == WM_DESTROY) {
     PostQuitMessage(0);
     return 0;
   }
   return DefWindowProc(hwnd, msg, wp, lp);
 }
 
-// ── WinMain
-// ───────────────────────────────────────────────────────────────────
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int) {
+  AttachConsole(ATTACH_PARENT_PROCESS);
+  freopen("CONOUT$", "w", stdout);
   SetProcessDPIAware();
   g_hInstance = hInst;
 
   if (FAILED(CoInitializeEx(NULL, COINIT_MULTITHREADED)))
     return -1;
-
-  // --- Parse command line: first argument = video path ---
   {
     int argc;
     LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
-    if (argc >= 2) {
+    if (argc >= 2)
       g_videoPath = argv[1];
-    } else {
-      // fallback: same folder as exe
+    else {
       char exePath[MAX_PATH];
       GetModuleFileNameA(NULL, exePath, MAX_PATH);
       PathRemoveFileSpecA(exePath);
@@ -286,12 +340,11 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int) {
     LocalFree(argv);
   }
 
-  int W = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-  int H = GetSystemMetrics(SM_CYVIRTUALSCREEN);
-  int X = GetSystemMetrics(SM_XVIRTUALSCREEN);
-  int Y = GetSystemMetrics(SM_YVIRTUALSCREEN);
+  int W = GetSystemMetrics(SM_CXVIRTUALSCREEN),
+      H = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+  int X = GetSystemMetrics(SM_XVIRTUALSCREEN),
+      Y = GetSystemMetrics(SM_YVIRTUALSCREEN);
 
-  // --- Register window class ---
   WNDCLASS wc = {};
   wc.lpfnWndProc = WindowProc;
   wc.hInstance = hInst;
@@ -299,63 +352,53 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int) {
   wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
   RegisterClass(&wc);
 
-  // --- Create wallpaper window behind desktop icons ---
-  HWND progman = GetDesktopLayer();
+  try {
+    HWND progman = GetDesktopLayer();
+    g_inst.hwnd = CreateWindowEx(
+        WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME, "Dynamic Wallpaper",
+        WS_POPUP | WS_VISIBLE, X, Y, W, H, NULL, NULL, hInst, nullptr);
+    if (!g_inst.hwnd) {
+      CoUninitialize();
+      return -1;
+    }
+    if (progman && g_hwndDefView) {
+      SetParent(g_inst.hwnd, progman);
+      SetWindowPos(g_inst.hwnd, g_hwndDefView, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    } else {
+      SetWindowPos(g_inst.hwnd, HWND_BOTTOM, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
 
-  g_inst.hwnd = CreateWindowEx(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME,
-                               "Dynamic Wallpaper", WS_POPUP | WS_VISIBLE, X, Y,
-                               W, H, NULL, NULL, hInst, nullptr);
+    g_inst.renderer = new D3DRenderer(g_inst.hwnd);
+    g_inst.player = new VideoPlayer();
+    if (!g_inst.renderer->Initialize(W, H) ||
+        FAILED(g_inst.player->Initialize(g_inst.renderer->GetDevice()))) {
+      CoUninitialize();
+      return -1;
+    }
+    if (SUCCEEDED(g_inst.player->OpenFile(g_videoPath)))
+      g_inst.player->Play();
 
-  if (!g_inst.hwnd) {
+    std::thread rt(RenderThread);
+    MSG msg = {};
+    while (GetMessage(&msg, NULL, 0, 0) > 0) {
+      TranslateMessage(&msg);
+      DispatchMessage(&msg);
+    }
+
+    g_bRunning = false;
+    rt.join();
+    g_inst.player->Shutdown();
+    delete g_inst.player;
+    delete g_inst.renderer;
     CoUninitialize();
+    return 0;
+  } catch (const std::exception &e) {
+    LogMsg(std::string("CRASH: std::exception caught: ") + e.what());
+    return -1;
+  } catch (...) {
+    LogMsg("CRASH: Unknown C++ exception caught.");
     return -1;
   }
-
-  if (progman && g_hwndDefView) {
-    SetParent(g_inst.hwnd, progman);
-    SetWindowPos(g_inst.hwnd, g_hwndDefView, 0, 0, 0, 0,
-                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-  } else {
-    SetWindowPos(g_inst.hwnd, HWND_BOTTOM, 0, 0, 0, 0,
-                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-  }
-
-  // --- Init D3D + VideoPlayer ---
-  g_inst.renderer = new D3DRenderer(g_inst.hwnd);
-  g_inst.player = new VideoPlayer();
-
-  if (!g_inst.renderer->Initialize(W, H)) {
-    CoUninitialize();
-    return -1;
-  }
-  if (FAILED(g_inst.player->Initialize(g_inst.renderer->GetDevice()))) {
-    CoUninitialize();
-    return -1;
-  }
-
-  if (SUCCEEDED(g_inst.player->OpenFile(g_videoPath))) {
-    g_inst.player->Play();
-  } else {
-    // Failed to open file
-  }
-
-  // --- Start render thread ---
-  std::thread rt(RenderThread);
-
-  // --- Message loop ---
-  MSG msg = {};
-  while (GetMessage(&msg, NULL, 0, 0) > 0) {
-    TranslateMessage(&msg);
-    DispatchMessage(&msg);
-  }
-
-  g_bRunning = false;
-  rt.join();
-
-  g_inst.player->Shutdown();
-  delete g_inst.player;
-  delete g_inst.renderer;
-
-  CoUninitialize();
-  return 0;
 }

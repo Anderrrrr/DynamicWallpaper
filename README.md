@@ -1,79 +1,61 @@
 # 輕量級動態桌布 (Lightweight Dynamic Wallpaper)
 
-這是一個極輕量級的 Windows C++ 動態桌布程式，專為玩家設計的「0 效能消耗」模式方案。
+一個極輕量的 Windows C++ 動態桌布，使用 **D3D11 GPU 解碼**直接渲染影片至桌面背景。
 
 ## 特色
-1. **底層注入**：相容 Windows 10 至目前最新 Windows 11 (24H2 / 25H2) 的桌面底層架構。
-2. **多螢幕火力支援**：提供命令列參數讓您自由決定要「橫跨整個桌面」還是「每一個螢幕播放獨立畫面」。
-3. **等比例裁切 (Pan and Scan)**：不論您選擇哪種模式，影片都會自動保持完美比例填滿螢幕並裁切邊緣，絕不變形。
-4. **純硬體解碼直出 (Zero-Copy Hardware Decoding)**：整合 `IMFDXGIDeviceManager` 讓影片引擎 (DXVA/D3D11VA) 直接輸出 `NV12` 格式的 GPU 紋理，並利用 `ID3D11VideoProcessor` 硬體色彩轉換與 Blit 到 Swapchain。CPU 使用率從原先的 ~20% 大幅降至 1~2% 範圍。
-5. **無縫循環**：捕捉底層 `MEEndOfPresentation` 事件，毫秒級 Seek 至 0 秒接續播放。
-6. **0 效能消耗模式**：當偵測到任何應用程式（例如遊戲或是 YouTube）處於全螢幕狀態時，影片引擎會自動暫停播放，確保遊戲 FPS 不掉幀；切回視窗時瞬間恢復。
-7. **桌面圖示完美保留**：在 Windows 11 25H2 上透過 D3D11 視窗 (`WS_POPUP`) 重定位至 `Progman` 並動態置底於 `SHELLDLL_DefView` 之下，完美支援桌面圖示正常顯示與**原生的滑鼠拖曳選取 (Drag and Drop)**。
+
+| 功能 | 說明 |
+|------|------|
+| **GPU 硬體解碼** | 透過 Media Foundation + `IMFDXGIDeviceManager` 直接輸出 GPU 紋理，CPU 使用率 < 2% |
+| **桌面圖示保留** | 視窗注入 `Progman`，Z-Order 鎖定於 `SHELLDLL_DefView` 之下，不遮擋圖示 |
+| **原生拖曳選取** | 完整支援滑鼠左鍵框選桌面圖示 (Drag and Drop) |
+| **無縫循環** | 影片結束後自動 Seek 至 0 秒，無黑畫面閃爍 |
+| **多螢幕展開** | 視窗跨越 Virtual Screen (`SM_CXVIRTUALSCREEN × SM_CYVIRTUALSCREEN`)，自動覆蓋所有螢幕 |
+| **Windows 25H2 相容** | 捨棄舊版 EVR，改用 `WS_POPUP` + D3D11 Swapchain，修復 25H2 黑畫面問題 |
 
 ## 系統需求
-- Windows 10 / Windows 11（包含 24H2 / 25H2）
-- CMake (建議 3.15 以上)
-- 一款 C++ 編譯器：支援 Visual Studio (MSVC) 或 MinGW (GCC)。推薦使用 MSVC 避免中文路徑字元解析問題。
 
-## 建置與編譯教學 (使用 MSVC)
+| 項目 | 需求 |
+|------|------|
+| 作業系統 | **Windows 10 / Windows 11**（含 24H2、25H2） |
+| 顯示卡 | Direct3D 11.0 以上（近十年內的獨顯或內顯均可） |
+| 執行時依賴 | 無需額外安裝，D3D11 與 Media Foundation 均為 Windows 內建 |
+| 編譯工具 | Visual Studio 2019 / 2022（僅編譯時需要） |
 
-1. 確認您已經開啟了 **x64 Native Tools Command Prompt for VS 2022** 或在一般命令提示字元中載入了編譯環境變數，或者直接透過 PowerShell。
-2. 開啟 PowerShell，切換到本專案資料夾底下：
+> **可以在家裡的電腦直接用！** 只要把 `DynamicWallpaper.exe` 複製過去，再準備一個影片檔，雙擊或用命令列執行即可，**不需要安裝任何執行環境**。
+
+## 編譯方式
+
+1. 確認已安裝 **Visual Studio 2019 / 2022**（含 C++ 桌面開發元件）。
+2. 在 PowerShell 裡切換到專案根目錄，直接執行 build script：
    ```powershell
-   cd "您的專案解壓縮路徑"
+   .\build.bat
    ```
-3. 產生 MSVC 的編譯設定檔：
-   ```powershell
-   cmake -B build_msvc
-   ```
-4. 開始編譯 Release 最佳化版本：
-   ```powershell
-   cmake --build build_msvc --config Release
-   ```
-5. 完成後，執行檔將會輸出至 `build_msvc\Release\DynamicWallpaper.exe`。
+3. 編譯完成後，執行檔輸出至 `build_msvc\Release\DynamicWallpaper.exe`。
 
-## 如何使用
+## 使用方式
 
-編譯完成後，您可以打開 PowerShell 或 CMD，使用命令列參數控制多螢幕播放模式：
-
-### 模式一：橫跨所有螢幕 (Span)
-將一個影片放大並等比例裁切，橫跨您桌面上所有的螢幕：
 ```powershell
-.\build_msvc\Release\DynamicWallpaper.exe --span "C:\Path\To\Your\Video.mp4"
-```
-*(如果不加任何參數，預設就是橫跨模式)*
-
-### 模式二：每個螢幕獨立播放 (Monitors)
-讓您的每一顆實體螢幕擁有獨立的影片播放器。
-- **所有螢幕播放同一個影片**（影片將在每個螢幕上各自完整呈現，不會被跨螢幕裁切）：
-```powershell
-.\build_msvc\Release\DynamicWallpaper.exe --monitors "C:\Path\To\Your\Video.mp4"
+.\build_msvc\Release\DynamicWallpaper.exe "C:\Path\To\Your\Video.mp4"
 ```
 
-- **不同螢幕播放不同影片**（例如有三個螢幕，可以傳入三個不同的影片路徑）：
-```powershell
-.\build_msvc\Release\DynamicWallpaper.exe --monitors "C:\影片A.mp4" "D:\影片B.mp4" "E:\影片C.mp4"
-```
-*(程式會依序偵測您的螢幕順序分配影片，如果提供的影片數量少於螢幕數量，後面的螢幕將會重複輪播這些影片)*
-
-
-> **注意：因為此程式會針對 Progman / WorkerW 發送未公開的 Windows 底層訊息進行視窗注入，某些防毒軟體 (如 Kaspersky) 可能會將此行為誤判為惡意軟體而阻擋或刪除執行檔。若遇到此情況，請將編譯好的執行檔或專案資料夾加入防毒軟體的白名單 / 排除掃描清單中。**
+- 支援 `.mp4`、`.mkv`、`.mov` 等 Media Foundation 可解碼的格式。
+- 若未指定路徑，將嘗試在程式同目錄的上兩層尋找 `pixel-rain-traffic.3840x2160.mp4`。
+- 關閉程式：在工作列找到 `Dynamic Wallpaper` 視窗並關閉，或在 PowerShell 按 `Ctrl+C`。
 
 ## 已知限制
 
-- **偶爾的啟動黑畫面**：由於程式啟動時需要尋找與攔截 Explorer.exe (Progman) 的底層架構，極少數情況下可能遇到未正確附著。解決方法：**直接關閉並重新啟動程式**即可。
-- **偵錯日誌硬編碼**：目前 debug log 被寫死在 `C:\Users\ander\Dynamic_wallpaper\debug_log.txt`，如果路徑不存在將無法輸出日誌。
+- **單一影片模式**：目前一次只支援一個影片播放於 Virtual Screen（橫跨所有螢幕），尚未實作每個螢幕獨立影片。
+- **無音訊**：影片音軌不會播放。
+- **偶爾附著失敗**：啟動時若 Progman 尚未就緒，視窗可能無法正確注入桌面層。解決方法：關閉後重新啟動程式。
+- **防毒軟體誤報**：程式會對 Progman 發送未公開的 Windows 底層訊息 (`0x052C`)，部分防毒軟體（如 Kaspersky）可能誤判。請將執行檔加入白名單。
+
+## 技術原理（關於修復 GPU 超速問題）
+
+使用 D3D11 GPU 解碼時，Media Foundation 採用「共享紋理池 (Shared Texture Pool)」：解碼器不斷把新幀寫入固定的幾個 texture slot，如果程式直接持有 MF 的 texture reference 而不複製，MF 會在背景把未來幀覆寫進去——導致視覺上影片「超速」播放。
+
+本專案的解法：每次 pop 一幀後立即用 `CopySubresourceRegion` 把影像 **blit 到我們自己的 staging texture**，然後立刻釋放 MF 的 reference，使 MF 的 texture pool 可以自由運作而不干擾顯示。
 
 ---
 
-## 關於 Windows 11 25H2 顯示修復
-
-在 Windows 11 版本 25H2 更新中，微軟 DWM 完全破壞了原先基於 `WS_CHILD` EVR (Enhanced Video Renderer) 渲染在桌面圖示下方的基礎機制，導致所有的動態桌面軟體均出現「全黑畫面」的嚴重錯誤。
-
-本專案現已完全拋棄 EVR，採用了全新的 **ID3D11 + DXGI** 交換鏈 (Swapchain) 解決方案：
-1. **獨立繪製視窗**：建立不受 DWM 混淆的 `WS_POPUP` Canvas。
-2. **硬體轉碼通訊**：呼叫 `0x052C` 廣播分離出桌布圖層，將 D3D11 圖層父系化至 `Progman` 中。
-3. **Z-Order 精確打擊**：強制將視窗排列順序 (`SetWindowPos`) 鎖定於 `SHELLDLL_DefView` 之下。
-
-透過以上架構升級，不但繞過了 25H2 的黑畫面 Bug 阻擋，並且成功找回了所有玩家期盼的**原生滑鼠左鍵拖曳選取框功能**！
+*本專案採用純 Win32 / D3D11 / Media Foundation 實作，無任何第三方依賴。*

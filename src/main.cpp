@@ -330,42 +330,13 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int) {
     if (argc >= 2) {
       g_videoPath = argv[1];
     } else {
-      // 取 exe 所在目錄
+      // 如果沒有參數，嘗試在同目錄找預設影片
       char exeDir[MAX_PATH];
       GetModuleFileNameA(NULL, exeDir, MAX_PATH);
       PathRemoveFileSpecA(exeDir);
-
-      // 先嘗試讀 config.txt
-      std::string configPath = std::string(exeDir) + "\\config.txt";
-      std::ifstream cfg(configPath);
-      bool loaded = false;
-      if (cfg.is_open()) {
-        std::string line;
-        while (std::getline(cfg, line)) {
-          // 去掉 BOM、換行、前後空白
-          if (!line.empty() && (unsigned char)line[0] == 0xEF)
-            line.erase(0, 3);
-          while (!line.empty() && (line.back() == '\r' || line.back() == '\n' ||
-                                   line.back() == ' '))
-            line.pop_back();
-          while (!line.empty() && line.front() == ' ')
-            line.erase(line.begin());
-          if (!line.empty() && line[0] != '#') { // '#' 開頭視為註解
-            g_videoPath = std::wstring(line.begin(), line.end());
-            loaded = true;
-            break;
-          }
-        }
-      }
-
-      // 找不到 config.txt 就用預設影片
-      if (!loaded) {
-        PathRemoveFileSpecA(exeDir); // 再往上兩層（舊 fallback 行為）
-        PathRemoveFileSpecA(exeDir);
-        std::string fb =
-            std::string(exeDir) + "\\pixel-rain-traffic.3840x2160.mp4";
-        g_videoPath = std::wstring(fb.begin(), fb.end());
-      }
+      std::string fb =
+          std::string(exeDir) + "\\pixel-rain-traffic.3840x2160.mp4";
+      g_videoPath = std::wstring(fb.begin(), fb.end());
     }
     LocalFree(argv);
   }

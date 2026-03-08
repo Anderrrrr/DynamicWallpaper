@@ -5,8 +5,9 @@ import sys
 import time
 import json
 import logging
-import winreg
 import argparse
+import ctypes
+import winreg
 
 # Set up logging for the launcher
 log_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'launcher.log')
@@ -160,11 +161,27 @@ def delete_video(filename):
             return jsonify({'status': 'error', 'message': str(e)}), 500
     return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
+def set_static_wallpaper(image_path):
+    # SPI_SETDESKWALLPAPER = 20
+    # SPIF_UPDATEINIFILE = 0x01
+    # SPIF_SENDWININICHANGE = 0x02
+    try:
+        if os.path.exists(image_path):
+            abs_path = os.path.abspath(image_path)
+            ctypes.windll.user32.SystemParametersInfoW(20, 0, abs_path, 3)
+            logging.info(f"Set static desktop wallpaper to {abs_path}")
+    except Exception as e:
+        logging.error(f"Failed to set static wallpaper: {e}")
+
 def apply_wallpaper(filename):
     global current_process
     filepath = os.path.join(VIDEOS_DIR, filename)
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"File {filename} does not exist")
+        
+    # Set the static wallpaper to the thumbnail for a seamless transition
+    thumb_path = os.path.join(THUMBNAILS_DIR, f"{filename}.jpg")
+    set_static_wallpaper(thumb_path)
         
     # Kill the existing process if running
     if current_process is not None:
@@ -198,28 +215,33 @@ def apply_wallpaper(filename):
     )
     logging.info(f"Successfully spawned process with PID: {current_process.pid}")
 
-def set_autostart_registry(enable):
-    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-    app_name = "DynamicWallpaperUI"
-    
+def set_autostart_task(enable):
+    task_name = "DynamicWallpaperBoot"
     try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
         if enable:
-            # the path to the silent launcher
             pythonw = sys.executable.replace('python.exe', 'pythonw.exe')
-            cmd = f'"{pythonw}" "{os.path.abspath(__file__)}" --bg'
-            winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, cmd)
-            logging.info(f"Set registry run key: {cmd}")
+            script_path = os.path.abspath(__file__)
+            
+            # The trick for task scheduler parameters: we must escape the quotes around the path!
+            action = f'\\\"{pythonw}\\\" \\\"{script_path}\\\" --bg'
+            args = f'/create /tn "{task_name}" /tr "{action}" /sc onlogon /rl highest /f'
+            
+            ret = ctypes.windll.shell32.ShellExecuteW(None, "runas", "schtasks", args, None, 0)
+            if ret <= 32:
+                logging.error(f"UAC prompt denied or task creation failed (Code {ret})")
+                return False
+            logging.info("Created Task Scheduler autostart entry")
         else:
-            try:
-                winreg.DeleteValue(key, app_name)
-                logging.info(f"Deleted registry run key: {app_name}")
-            except FileNotFoundError:
-                pass # Already deleted
-        winreg.CloseKey(key)
+            args = f'/delete /tn "{task_name}" /f'
+            ret = ctypes.windll.shell32.ShellExecuteW(None, "runas", "schtasks", args, None, 0)
+            if ret <= 32:
+                logging.error(f"UAC prompt denied or task removal failed (Code {ret})")
+                return False
+            logging.info("Removed Task Scheduler autostart entry")
+            
         return True
     except Exception as e:
-        logging.error(f"Failed to set registry: {e}")
+        logging.error(f"Failed to set task scheduler: {e}")
         return False
 
 @app.route('/api/settings', methods=['GET', 'POST'])
@@ -231,8 +253,12 @@ def manage_settings():
         cfg = load_config()
         if 'start_on_boot' in data:
             enable = bool(data['start_on_boot'])
+            # Since task creating needs UAC, check if user approved it
+            success = set_autostart_task(enable)
+            if not success:
+                return jsonify({'status': 'error', 'message': 'Permission denied. You must grant Administrator privileges to enable Fast Boot.'}), 403
             cfg['start_on_boot'] = enable
-            set_autostart_registry(enable)
+            
         if 'startup_video' in data:
             cfg['startup_video'] = data['startup_video']
             
@@ -279,6 +305,21 @@ if __name__ == '__main__':
             return b'DynamicWallpaper.exe' in output
         except:
             return False
+
+    def cleanup_old_registry():
+        try:
+            key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
+            try:
+                winreg.DeleteValue(key, "DynamicWallpaperUI")
+                logging.info("Cleaned up old registry autostart key.")
+            except FileNotFoundError:
+                pass
+            winreg.CloseKey(key)
+        except Exception as e:
+            pass
+
+    cleanup_old_registry()
 
     # Check for startup video on boot, but ONLY if we are starting up (e.g. from background or not already running)
     cfg = load_config()

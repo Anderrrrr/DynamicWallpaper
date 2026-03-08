@@ -316,8 +316,9 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int) {
-  AttachConsole(ATTACH_PARENT_PROCESS);
-  freopen("CONOUT$", "w", stdout);
+  if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+    freopen("CONOUT$", "w", stdout);
+  }
   SetProcessDPIAware();
   g_hInstance = hInst;
 

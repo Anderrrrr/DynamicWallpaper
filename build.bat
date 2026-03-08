@@ -22,7 +22,7 @@ if not exist build_msvc\Release mkdir build_msvc\Release
 cd build_msvc\Release
 
 echo 正在編譯 C++ 原始碼...
-cl.exe /O2 /MD /EHsc /W3 /D_WIN32_WINNT=0x0602 /DNTDDI_VERSION=0x06020000 /Fe"DynamicWallpaper.exe" ..\..\src\main.cpp ..\..\src\VideoPlayer.cpp user32.lib shell32.lib mf.lib mfplat.lib mfuuid.lib shlwapi.lib ole32.lib gdi32.lib strmiids.lib evr.lib mfreadwrite.lib d3dcompiler.lib winmm.lib propsys.lib /link /SUBSYSTEM:CONSOLE /ENTRY:WinMainCRTStartup
+cl.exe /O2 /MD /EHsc /W3 /D_WIN32_WINNT=0x0602 /DNTDDI_VERSION=0x06020000 /Fe"DynamicWallpaper.exe" ..\..\src\main.cpp ..\..\src\VideoPlayer.cpp user32.lib shell32.lib mf.lib mfplat.lib mfuuid.lib shlwapi.lib ole32.lib gdi32.lib strmiids.lib evr.lib mfreadwrite.lib d3dcompiler.lib winmm.lib propsys.lib /link /SUBSYSTEM:WINDOWS /ENTRY:WinMainCRTStartup
 
 if %ERRORLEVEL% equ 0 (
   echo.

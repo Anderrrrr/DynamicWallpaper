@@ -1,3 +1,5 @@
 {
-    "exe_path": "C:\\Users\\ander\\Dynamic_wallpaper\\build_msvc\\Release\\DynamicWallpaper.exe"
+    "exe_path": "C:\\DynamicWallpaperSource\\build_msvc\\Release\\DynamicWallpaper.exe",
+    "start_on_boot": true,
+    "startup_video": "1758183063.mp4"
 }

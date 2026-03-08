@@ -316,9 +316,6 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int) {
-  if (AttachConsole(ATTACH_PARENT_PROCESS)) {
-    freopen("CONOUT$", "w", stdout);
-  }
   SetProcessDPIAware();
   g_hInstance = hInst;
 
@@ -355,11 +352,9 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int) {
 
   try {
     HWND progman = GetDesktopLayer();
-
-    // 建立視窗時先隱藏 (不加 WS_VISIBLE)，避免出現在工作列或閃爍
-    g_inst.hwnd = CreateWindowEx(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
-                                 CLASS_NAME, "Dynamic Wallpaper", WS_POPUP, X,
-                                 Y, W, H, NULL, NULL, hInst, nullptr);
+    g_inst.hwnd = CreateWindowEx(
+        WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE, CLASS_NAME, "Dynamic Wallpaper",
+        WS_POPUP | WS_VISIBLE, X, Y, W, H, NULL, NULL, hInst, nullptr);
 
     if (!g_inst.hwnd) {
       CoUninitialize();
@@ -375,9 +370,6 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int) {
       SetWindowPos(g_inst.hwnd, HWND_BOTTOM, 0, 0, 0, 0,
                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
-
-    // 注入並排好 Z-Order 後再顯示
-    ShowWindow(g_inst.hwnd, SW_SHOWNOACTIVATE);
 
     g_inst.renderer = new D3DRenderer(g_inst.hwnd);
     g_inst.player = new VideoPlayer();

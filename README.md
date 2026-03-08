@@ -8,6 +8,7 @@
 |------|------|
 | **GPU 硬體解碼** | 透過 Media Foundation + `IMFDXGIDeviceManager` 直接輸出 GPU 紋理，CPU 使用率 < 2% |
 | **圖形管理介面 (NEW!)** | 內建 Python Flask + PyQt6 打造的現代化毛玻璃桌面 UI，支援拖曳上傳與一鍵切換桌布影片 |
+| **開機自動啟動 (NEW!)** | UI 內建 Settings 設定頁，可開啟「開機啟動」，會自動記住最後播放的影片並在背景默默啟動 |
 | **桌面圖示保留** | 視窗注入 `Progman`，Z-Order 鎖定於 `SHELLDLL_DefView` 之下，不遮擋圖示 |
 | **原生拖曳選取** | 完整支援滑鼠左鍵框選桌面圖示 (Drag and Drop) |
 | **無縫循環** | 影片結束後自動 Seek 至 0 秒，無黑畫面閃爍 |
@@ -49,8 +50,9 @@
 3. 雙擊專案目錄下的 **`DynamicWallpaperUI.bat`** 即可開啟精美的桌面管理視窗！(也建議為它建立桌面捷徑)
    - 您可以直接把影片拖曳進去上傳。
    - 點擊「Gallery」中影片卡片的**任何地方**即可立即切換桌布。
+   - **開機自動啟動**：在左側選單進入「Settings」，將 Start on Boot 打開。程式就會在每次電腦開機時，自動於背景播放您最後選擇的影片。
    - **背景安靜執行**：程式會在背景無黑視窗模式下默默播放桌布。若要關閉桌布，請至「工作管理員」尋找並結束 `DynamicWallpaper.exe`。
-   - **自訂路徑與除錯**：支援讀取 `WebUI/config.json` 自訂引擎路徑，並會將執行狀況輸出至 `launcher.log`。
+   - **自訂路徑與除錯**：支援讀取 `WebUI/config.json`，並會將執行狀況輸出至 `wallpaper_engine_log.txt` 與 `launcher.log`。
 
 ### 方法二：透過指令列 (Command Line)
 

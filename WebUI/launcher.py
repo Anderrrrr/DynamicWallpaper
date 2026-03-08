@@ -5,6 +5,8 @@ import sys
 import time
 import json
 import logging
+import winreg
+import argparse
 
 # Set up logging for the launcher
 log_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'launcher.log')
@@ -27,22 +29,33 @@ VIDEOS_DIR = os.path.join(BASE_DIR, 'videos')
 
 # Try loading from config.json first
 CONFIG_PATH = os.path.join(BASE_DIR, 'WebUI', 'config.json')
-if os.path.exists(CONFIG_PATH):
-    try:
-        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
-            config_data = json.load(f)
-            EXE_PATH = config_data.get('exe_path', os.path.join(BASE_DIR, 'build_msvc', 'Release', 'DynamicWallpaper.exe'))
-    except Exception as e:
-        logging.error(f"Error reading config.json: {e}")
-        EXE_PATH = os.path.join(BASE_DIR, 'build_msvc', 'Release', 'DynamicWallpaper.exe')
-else:
-    EXE_PATH = os.path.join(BASE_DIR, 'build_msvc', 'Release', 'DynamicWallpaper.exe')
-    # Create default config.json
+
+def load_config():
+    default_config = {
+        'exe_path': os.path.join(BASE_DIR, 'build_msvc', 'Release', 'DynamicWallpaper.exe'),
+        'start_on_boot': False,
+        'startup_video': ''
+    }
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                default_config.update(data)
+        except Exception as e:
+            logging.error(f"Error reading config.json: {e}")
+    else:
+        save_config(default_config)
+    return default_config
+
+def save_config(config_data):
     try:
         with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
-            json.dump({'exe_path': EXE_PATH}, f, indent=4)
+            json.dump(config_data, f, indent=4)
     except Exception as e:
-        logging.error(f"Error creating config.json: {e}")
+        logging.error(f"Error writing config.json: {e}")
+
+config = load_config()
+EXE_PATH = config.get('exe_path', os.path.join(BASE_DIR, 'build_msvc', 'Release', 'DynamicWallpaper.exe'))
 
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mkv', 'mov'}
 
@@ -135,15 +148,99 @@ def delete_video(filename):
             os.remove(filepath)
             if os.path.exists(thumb_path):
                 os.remove(thumb_path)
+                
+            # Clear startup video if it was deleted
+            cfg = load_config()
+            if cfg.get('startup_video') == filename:
+                cfg['startup_video'] = ''
+                save_config(cfg)
+                
             return jsonify({'status': 'success', 'message': f'File {filename} deleted'})
         except Exception as e:
             return jsonify({'status': 'error', 'message': str(e)}), 500
     return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
+def apply_wallpaper(filename):
+    global current_process
+    filepath = os.path.join(VIDEOS_DIR, filename)
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"File {filename} does not exist")
+        
+    # Kill the existing process if running
+    if current_process is not None:
+        logging.info("Terminating existing process...")
+        try:
+            current_process.terminate()
+            current_process.wait(timeout=1) # wait for it to actually die
+        except Exception as e:
+            logging.error(f"Error terminating process: {e}")
+        
+    # We can also forcefully kill any remaining DynamicWallpaper.exe instances just in case
+    logging.info("Running taskkill on previous instances...")
+    os.system('taskkill /F /IM DynamicWallpaper.exe')
+    
+    # Start new process
+    absolute_path = os.path.abspath(filepath)
+    logging.info(f"Opening log file for engine at: {os.path.join(BASE_DIR, 'wallpaper_engine_log.txt')}")
+    log_file = open(os.path.join(BASE_DIR, 'wallpaper_engine_log.txt'), 'w', encoding='utf-8')
+    
+    logging.info(f"Calling Popen with EXE_PATH: {EXE_PATH} and video: {absolute_path}")
+    # DETACHED_PROCESS = 0x00000008, CREATE_NEW_PROCESS_GROUP = 0x00000200
+    CREATE_NO_WINDOW = 0x08000000
+    DETACHED_PROCESS = 0x00000008
+    
+    current_process = subprocess.Popen(
+        [EXE_PATH, absolute_path], 
+        cwd=BASE_DIR,
+        stdout=log_file,
+        stderr=log_file,
+        creationflags=CREATE_NO_WINDOW | DETACHED_PROCESS
+    )
+    logging.info(f"Successfully spawned process with PID: {current_process.pid}")
+
+def set_autostart_registry(enable):
+    key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+    app_name = "DynamicWallpaperUI"
+    
+    try:
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
+        if enable:
+            # the path to the silent launcher
+            pythonw = sys.executable.replace('python.exe', 'pythonw.exe')
+            cmd = f'"{pythonw}" "{os.path.abspath(__file__)}" --bg'
+            winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, cmd)
+            logging.info(f"Set registry run key: {cmd}")
+        else:
+            try:
+                winreg.DeleteValue(key, app_name)
+                logging.info(f"Deleted registry run key: {app_name}")
+            except FileNotFoundError:
+                pass # Already deleted
+        winreg.CloseKey(key)
+        return True
+    except Exception as e:
+        logging.error(f"Failed to set registry: {e}")
+        return False
+
+@app.route('/api/settings', methods=['GET', 'POST'])
+def manage_settings():
+    if request.method == 'GET':
+        return jsonify({'status': 'success', 'settings': load_config()})
+    else:
+        data = request.json
+        cfg = load_config()
+        if 'start_on_boot' in data:
+            enable = bool(data['start_on_boot'])
+            cfg['start_on_boot'] = enable
+            set_autostart_registry(enable)
+        if 'startup_video' in data:
+            cfg['startup_video'] = data['startup_video']
+            
+        save_config(cfg)
+        return jsonify({'status': 'success', 'message': 'Settings saved successfully', 'settings': cfg})
+
 @app.route('/api/set_wallpaper', methods=['POST'])
 def set_wallpaper():
-    global current_process
-    
     data = request.json
     if not data or 'filename' not in data:
         return jsonify({'status': 'error', 'message': 'No filename provided'}), 400
@@ -155,31 +252,12 @@ def set_wallpaper():
          return jsonify({'status': 'error', 'message': 'File does not exist'}), 404
          
     try:
-        # Kill the existing process if running
-        if current_process is not None:
-            logging.info("Terminating existing process...")
-            current_process.terminate()
-            current_process.wait() # wait for it to actually die
-            
-        # We can also forcefully kill any remaining DynamicWallpaper.exe instances just in case
-        logging.info("Running taskkill on previous instances...")
-        subprocess.run(['taskkill', '/F', '/IM', 'DynamicWallpaper.exe'], 
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        apply_wallpaper(filename)
         
-        # Start new process
-        absolute_path = os.path.abspath(filepath)
-        logging.info(f"Opening log file for engine at: {os.path.join(BASE_DIR, 'wallpaper_engine_log.txt')}")
-        log_file = open(os.path.join(BASE_DIR, 'wallpaper_engine_log.txt'), 'w', encoding='utf-8')
-        
-        logging.info(f"Calling Popen with EXE_PATH: {EXE_PATH} and video: {absolute_path}")
-        current_process = subprocess.Popen(
-            [EXE_PATH, absolute_path], 
-            cwd=BASE_DIR,
-            stdout=log_file,
-            stderr=log_file,
-            creationflags=subprocess.CREATE_NO_WINDOW
-        )
-        logging.info(f"Successfully spawned process with PID: {current_process.pid}")
+        # Save as startup video
+        cfg = load_config()
+        cfg['startup_video'] = filename
+        save_config(cfg)
         
         return jsonify({'status': 'success', 'message': f'Started playing {filename}'})
     except Exception as e:
@@ -191,6 +269,28 @@ def start_server():
     app.run(host='127.0.0.1', port=5000, debug=False)
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--bg', action='store_true', help='Run in background (no UI)')
+    args = parser.parse_args()
+    
+    def is_wallpaper_running():
+        try:
+            output = subprocess.check_output(['tasklist', '/FI', 'IMAGENAME eq DynamicWallpaper.exe'], stderr=subprocess.STDOUT)
+            return b'DynamicWallpaper.exe' in output
+        except:
+            return False
+
+    # Check for startup video on boot, but ONLY if we are starting up (e.g. from background or not already running)
+    cfg = load_config()
+    if cfg.get('startup_video'):
+        if not is_wallpaper_running():
+            try:
+                apply_wallpaper(cfg['startup_video'])
+            except Exception as e:
+                logging.error(f"Failed to auto-start wallpaper: {e}")
+        else:
+            logging.info("Wallpaper engine is already running, skipping auto-start.")
+            
     print(f"Starting DynamicWallpaper Server from: {BASE_DIR}")
     print(f"Videos Directory: {VIDEOS_DIR}")
     print(f"Executable Path: {EXE_PATH}")
@@ -200,22 +300,31 @@ if __name__ == '__main__':
     flask_thread.daemon = True
     flask_thread.start()
     
-    # Give Flask a second to spin up the server
-    time.sleep(1)
-    
-    # Start the PyQt Desktop GUI
-    app_gui = QApplication(sys.argv)
-    app_gui.setApplicationName("Dynamic Wallpaper")
-    
-    window = QMainWindow()
-    window.setWindowTitle('Dynamic Wallpaper Settings')
-    window.resize(1050, 750)
-    
-    web_view = QWebEngineView()
-    web_view.setUrl(QUrl("http://127.0.0.1:5000"))
-    window.setCentralWidget(web_view)
-    
-    window.show()
-    
-    # Run the GUI event loop
-    sys.exit(app_gui.exec())
+    # If run in background by registry, we just sleep the main thread forever
+    if args.bg:
+        logging.info("Running in background mode (no GUI).")
+        try:
+            while True:
+                time.sleep(10)
+        except KeyboardInterrupt:
+            pass
+    else:
+        # Give Flask a second to spin up the server
+        time.sleep(1)
+        
+        # Start the PyQt Desktop GUI
+        app_gui = QApplication(sys.argv)
+        app_gui.setApplicationName("Dynamic Wallpaper")
+        
+        window = QMainWindow()
+        window.setWindowTitle('Dynamic Wallpaper Settings')
+        window.resize(1050, 750)
+        
+        web_view = QWebEngineView()
+        web_view.setUrl(QUrl("http://127.0.0.1:5000"))
+        window.setCentralWidget(web_view)
+        
+        window.show()
+        
+        # Run the GUI event loop
+        sys.exit(app_gui.exec())

@@ -5,12 +5,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const navSettings = document.getElementById('nav-settings');
     const viewGallery = document.getElementById('view-gallery');
     const viewUpload = document.getElementById('view-upload');
+    const viewSettings = document.getElementById('view-settings');
 
     function switchView(view) {
         // Update nav active states
         [navGallery, navUpload, navSettings].forEach(nav => nav.classList.remove('active'));
         // Hide all views
-        [viewGallery, viewUpload].forEach(v => { if (v) v.classList.remove('active') });
+        [viewGallery, viewUpload, viewSettings].forEach(v => { if (v) v.classList.remove('active') });
 
         if (view === 'gallery') {
             navGallery.classList.add('active');
@@ -21,8 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
             viewUpload.classList.add('active');
         } else if (view === 'settings') {
             navSettings.classList.add('active');
-            // Settings placeholder
-            showToast('Settings coming soon!', false);
+            viewSettings.classList.add('active');
+            fetchSettings();
         }
     }
 
@@ -129,6 +130,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (data.status === 'success') {
                 showToast(`Playing ${filename}`, true);
+                // Automatically update the config since backend updates startup_video
+                if (settingStartupVideo) {
+                    settingStartupVideo.textContent = filename;
+                }
             } else {
                 showToast(data.message, false);
             }
@@ -256,6 +261,59 @@ document.addEventListener('DOMContentLoaded', () => {
 
         xhr.send(formData);
     }
+
+    // --- Settings Logic ---
+    const settingAutostart = document.getElementById('setting-autostart');
+    const settingStartupVideo = document.getElementById('setting-startup-video');
+    const settingSlider = document.getElementById('setting-slider'); // The visible toggle 
+
+    function updateToggleVisuals(isEnabled) {
+        if (isEnabled) {
+            settingSlider.classList.add('active');
+        } else {
+            settingSlider.classList.remove('active');
+        }
+    }
+
+    async function fetchSettings() {
+        try {
+            const response = await fetch('/api/settings');
+            const data = await response.json();
+            if (data.status === 'success') {
+                const config = data.settings;
+                settingAutostart.checked = !!config.start_on_boot;
+                updateToggleVisuals(settingAutostart.checked);
+                settingStartupVideo.textContent = config.startup_video || 'None';
+            }
+        } catch (error) {
+            console.error('Error fetching settings:', error);
+        }
+    }
+
+    settingAutostart.addEventListener('change', async (e) => {
+        const isEnabled = e.target.checked;
+        updateToggleVisuals(isEnabled); // Optimistic UI update
+        try {
+            const response = await fetch('/api/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ start_on_boot: isEnabled })
+            });
+            const data = await response.json();
+            if (data.status === 'success') {
+                showToast(isEnabled ? 'Autostart Enabled' : 'Autostart Disabled', true);
+            } else {
+                showToast(data.message, false);
+                settingAutostart.checked = !isEnabled; // Revert
+                updateToggleVisuals(!isEnabled);
+            }
+        } catch (error) {
+            console.error('Error saving settings:', error);
+            showToast('Failed to save settings', false);
+            settingAutostart.checked = !isEnabled; // Revert
+            updateToggleVisuals(!isEnabled);
+        }
+    });
 
     // Initialize
     fetchVideos();

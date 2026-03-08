@@ -46,9 +46,11 @@
    pip install PyQt6 PyQt6-WebEngine opencv-python
    cd ..
    ```
-3. 雙擊專案目錄下的 **`DynamicWallpaperUI.bat`** 即可開啟精美的桌面管理視窗！
+3. 雙擊專案目錄下的 **`DynamicWallpaperUI.bat`** 即可開啟精美的桌面管理視窗！(也建議為它建立桌面捷徑)
    - 您可以直接把影片拖曳進去上傳。
-   - 點擊「Gallery」中的影片立即切換桌布。
+   - 點擊「Gallery」中影片卡片的**任何地方**即可立即切換桌布。
+   - **背景安靜執行**：程式會在背景無黑視窗模式下默默播放桌布。若要關閉桌布，請至「工作管理員」尋找並結束 `DynamicWallpaper.exe`。
+   - **自訂路徑與除錯**：支援讀取 `WebUI/config.json` 自訂引擎路徑，並會將執行狀況輸出至 `launcher.log`。
 
 ### 方法二：透過指令列 (Command Line)
 

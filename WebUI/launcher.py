@@ -3,6 +3,14 @@ import subprocess
 import threading
 import sys
 import time
+import json
+import logging
+
+# Set up logging for the launcher
+log_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'launcher.log')
+logging.basicConfig(filename=log_file_path, level=logging.DEBUG, 
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+logging.info("Starting launcher...")
 
 from PyQt6.QtCore import QUrl
 from PyQt6.QtWidgets import QApplication, QMainWindow
@@ -16,13 +24,30 @@ app = Flask(__name__)
 # Config
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VIDEOS_DIR = os.path.join(BASE_DIR, 'videos')
-EXE_PATH = os.path.join(BASE_DIR, 'build_msvc', 'Release', 'DynamicWallpaper.exe')
+
+# Try loading from config.json first
+CONFIG_PATH = os.path.join(BASE_DIR, 'WebUI', 'config.json')
+if os.path.exists(CONFIG_PATH):
+    try:
+        with open(CONFIG_PATH, 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+            EXE_PATH = config_data.get('exe_path', os.path.join(BASE_DIR, 'build_msvc', 'Release', 'DynamicWallpaper.exe'))
+    except Exception as e:
+        logging.error(f"Error reading config.json: {e}")
+        EXE_PATH = os.path.join(BASE_DIR, 'build_msvc', 'Release', 'DynamicWallpaper.exe')
+else:
+    EXE_PATH = os.path.join(BASE_DIR, 'build_msvc', 'Release', 'DynamicWallpaper.exe')
+    # Create default config.json
+    try:
+        with open(CONFIG_PATH, 'w', encoding='utf-8') as f:
+            json.dump({'exe_path': EXE_PATH}, f, indent=4)
+    except Exception as e:
+        logging.error(f"Error creating config.json: {e}")
+
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mkv', 'mov'}
 
-# Ensure videos directory exists
+# Ensure directories exist
 THUMBNAILS_DIR = os.path.join(BASE_DIR, 'WebUI', 'static', 'thumbnails')
-os.makedirs(VIDEOS_DIR, exist_ok=True)
-os.makedirs(THUMBNAILS_DIR, exist_ok=True)
 os.makedirs(VIDEOS_DIR, exist_ok=True)
 
 # Keep track of the running wallpaper process
@@ -132,20 +157,33 @@ def set_wallpaper():
     try:
         # Kill the existing process if running
         if current_process is not None:
+            logging.info("Terminating existing process...")
             current_process.terminate()
             current_process.wait() # wait for it to actually die
             
         # We can also forcefully kill any remaining DynamicWallpaper.exe instances just in case
+        logging.info("Running taskkill on previous instances...")
         subprocess.run(['taskkill', '/F', '/IM', 'DynamicWallpaper.exe'], 
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
         # Start new process
-        relative_path = os.path.join("videos", filename)
-        # We need to run it from BASE_DIR so relative paths work if the C++ code expects it
-        current_process = subprocess.Popen([EXE_PATH, relative_path], cwd=BASE_DIR)
+        absolute_path = os.path.abspath(filepath)
+        logging.info(f"Opening log file for engine at: {os.path.join(BASE_DIR, 'wallpaper_engine_log.txt')}")
+        log_file = open(os.path.join(BASE_DIR, 'wallpaper_engine_log.txt'), 'w', encoding='utf-8')
+        
+        logging.info(f"Calling Popen with EXE_PATH: {EXE_PATH} and video: {absolute_path}")
+        current_process = subprocess.Popen(
+            [EXE_PATH, absolute_path], 
+            cwd=BASE_DIR,
+            stdout=log_file,
+            stderr=log_file,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        logging.info(f"Successfully spawned process with PID: {current_process.pid}")
         
         return jsonify({'status': 'success', 'message': f'Started playing {filename}'})
     except Exception as e:
+        logging.error(f"Exception in set_wallpaper endpoint: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 def start_server():

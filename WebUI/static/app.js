@@ -96,12 +96,13 @@ document.addEventListener('DOMContentLoaded', () => {
         videos.forEach(video => {
             const card = document.createElement('div');
             card.className = 'video-card';
+            card.onclick = () => window.setWallpaper(video.name);
 
             const thumbStyle = video.thumbnail ? `style="background-image: url('${video.thumbnail}'); background-size: cover; background-position: center;"` : '';
 
             card.innerHTML = `
                 <div class="video-thumbnail" ${thumbStyle}>
-                    <div class="play-overlay" onclick="window.setWallpaper('${video.name}')">
+                    <div class="play-overlay">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                     </div>
                 </div>

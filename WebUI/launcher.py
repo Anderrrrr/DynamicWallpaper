@@ -216,33 +216,37 @@ def apply_wallpaper(filename):
     logging.info(f"Successfully spawned process with PID: {current_process.pid}")
 
 def set_autostart_task(enable):
-    task_name = "DynamicWallpaperBoot"
+    import os
+    
+    startup_dir = os.path.join(os.environ['APPDATA'], 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
+    vbs_path = os.path.join(startup_dir, 'DynamicWallpaperUI.vbs')
+    
+    # 加入這行：確保 Startup 資料夾一定存在
+    os.makedirs(startup_dir, exist_ok=True)
+    
     try:
         if enable:
-            pythonw = sys.executable.replace('python.exe', 'pythonw.exe')
-            script_path = os.path.abspath(__file__)
-            
-            # The trick for task scheduler parameters: we must escape the quotes around the path!
-            action = f'\\\"{pythonw}\\\" \\\"{script_path}\\\" --bg'
-            args = f'/create /tn "{task_name}" /tr "{action}" /sc onlogon /rl highest /f'
-            
-            ret = ctypes.windll.shell32.ShellExecuteW(None, "runas", "schtasks", args, None, 0)
-            if ret <= 32:
-                logging.error(f"UAC prompt denied or task creation failed (Code {ret})")
-                return False
-            logging.info("Created Task Scheduler autostart entry")
+            script_dir = os.path.abspath(BASE_DIR)
+            vbs_content = f"""' 自動產生的背景啟動腳本
+Dim WshShell
+Set WshShell = CreateObject("WScript.Shell")
+WshShell.CurrentDirectory = "{script_dir}"
+WshShell.Run "pythonw WebUI\launcher.py --bg", 0, False
+Set WshShell = Nothing
+"""
+            with open(vbs_path, 'w', encoding='utf-8') as f:
+                f.write(vbs_content)
+            logging.info("Created VBS script in Startup folder")
         else:
-            args = f'/delete /tn "{task_name}" /f'
-            ret = ctypes.windll.shell32.ShellExecuteW(None, "runas", "schtasks", args, None, 0)
-            if ret <= 32:
-                logging.error(f"UAC prompt denied or task removal failed (Code {ret})")
-                return False
-            logging.info("Removed Task Scheduler autostart entry")
+            if os.path.exists(vbs_path):
+                os.remove(vbs_path)
+            logging.info("Removed VBS script from Startup folder")
             
-        return True
+        return True, "Success"
     except Exception as e:
-        logging.error(f"Failed to set task scheduler: {e}")
-        return False
+        logging.error(f"Failed to set startup via VBS: {e}")
+        # 回傳 False 並且把真正的 exception 轉成字串傳出去
+        return False, str(e)
 
 @app.route('/api/settings', methods=['GET', 'POST'])
 def manage_settings():
@@ -253,10 +257,12 @@ def manage_settings():
         cfg = load_config()
         if 'start_on_boot' in data:
             enable = bool(data['start_on_boot'])
-            # Since task creating needs UAC, check if user approved it
-            success = set_autostart_task(enable)
+            
+            # 接收兩個回傳值
+            success, err_msg = set_autostart_task(enable)
             if not success:
-                return jsonify({'status': 'error', 'message': 'Permission denied. You must grant Administrator privileges to enable Fast Boot.'}), 403
+                # 把真正的錯誤訊息傳給 UI，不再顯示那個管理員的假警報
+                return jsonify({'status': 'error', 'message': f'寫入開機啟動失敗: {err_msg}'}), 500
             cfg['start_on_boot'] = enable
             
         if 'startup_video' in data:

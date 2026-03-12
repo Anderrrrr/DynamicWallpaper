@@ -7,6 +7,7 @@ import json
 import logging
 import argparse
 import ctypes
+import ctypes.wintypes  # [修改 1] 新增 wintypes
 import winreg
 
 # Set up logging for the launcher
@@ -15,7 +16,7 @@ logging.basicConfig(filename=log_file_path, level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 logging.info("Starting launcher...")
 
-from PyQt6.QtCore import QUrl
+from PyQt6.QtCore import QUrl, QTimer  # [修改 1] 新增 QTimer
 from PyQt6.QtWidgets import QApplication, QMainWindow
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
@@ -162,9 +163,6 @@ def delete_video(filename):
     return jsonify({'status': 'error', 'message': 'File not found'}), 404
 
 def set_static_wallpaper(image_path):
-    # SPI_SETDESKWALLPAPER = 20
-    # SPIF_UPDATEINIFILE = 0x01
-    # SPIF_SENDWININICHANGE = 0x02
     try:
         if os.path.exists(image_path):
             abs_path = os.path.abspath(image_path)
@@ -300,6 +298,52 @@ def start_server():
     # Use 127.0.0.1 for local desktop binding and turn off debug to avoid restarting threads weirdly in pywebview
     app.run(host='127.0.0.1', port=5000, debug=False)
 
+# [修改 2] 新增繼承自 QMainWindow 的自訂視窗類別，用來監聽喚醒事件
+class WallpaperWindow(QMainWindow):
+    def __init__(self, bg_mode=False):
+        super().__init__()
+        self.bg_mode = bg_mode
+        
+        # 如果不是背景模式，才初始化 UI
+        if not self.bg_mode:
+            self.setWindowTitle('Dynamic Wallpaper Settings')
+            self.resize(1050, 750)
+            self.web_view = QWebEngineView()
+            self.web_view.setUrl(QUrl("http://127.0.0.1:5000"))
+            self.setCentralWidget(self.web_view)
+
+    def nativeEvent(self, eventType, message):
+        try:
+            # 轉換指標以讀取 Windows 訊息
+            msg = ctypes.wintypes.MSG.from_address(message.__int__())
+            
+            WM_POWERBROADCAST = 0x021B
+            PBT_APMRESUMEAUTOMATIC = 0x0012
+            PBT_APMRESUMESUSPEND = 0x0007
+
+            # 判斷是否為電源廣播，且狀態為「喚醒」
+            if msg.message == WM_POWERBROADCAST:
+                if msg.wParam == PBT_APMRESUMEAUTOMATIC or msg.wParam == PBT_APMRESUMESUSPEND:
+                    logging.info("偵測到系統從睡眠中喚醒，準備重啟桌布...")
+                    
+                    # 延遲 3 秒執行，確保 Windows 桌面 (DWM) 已經完全載入準備好
+                    QTimer.singleShot(3000, self.restart_wallpaper)
+        except Exception as e:
+            logging.error(f"處理 nativeEvent 時發生錯誤: {e}")
+            
+        return super().nativeEvent(eventType, message)
+
+    def restart_wallpaper(self):
+        cfg = load_config()
+        startup_video = cfg.get('startup_video')
+        if startup_video:
+            logging.info(f"喚醒後重新載入影片: {startup_video}")
+            try:
+                apply_wallpaper(startup_video)
+            except Exception as e:
+                logging.error(f"喚醒重啟桌布失敗: {e}")
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--bg', action='store_true', help='Run in background (no UI)')
@@ -347,31 +391,23 @@ if __name__ == '__main__':
     flask_thread.daemon = True
     flask_thread.start()
     
-    # If run in background by registry, we just sleep the main thread forever
+    # [修改 3] 移除原本的 while True，統一使用 PyQt 的事件迴圈
+    time.sleep(1) # 給 Flask 一秒鐘啟動伺服器
+    
+    app_gui = QApplication(sys.argv)
+    app_gui.setApplicationName("Dynamic Wallpaper")
+    
+    # 如果是背景模式，確保關閉隱藏視窗時不會意外結束程式
     if args.bg:
-        logging.info("Running in background mode (no GUI).")
-        try:
-            while True:
-                time.sleep(10)
-        except KeyboardInterrupt:
-            pass
+        app_gui.setQuitOnLastWindowClosed(False)
+    
+    # 使用我們剛剛建立的自訂視窗類別
+    window = WallpaperWindow(bg_mode=args.bg)
+    
+    if args.bg:
+        logging.info("以背景模式運行 (隱藏 GUI，持續監聽系統事件).")
     else:
-        # Give Flask a second to spin up the server
-        time.sleep(1)
-        
-        # Start the PyQt Desktop GUI
-        app_gui = QApplication(sys.argv)
-        app_gui.setApplicationName("Dynamic Wallpaper")
-        
-        window = QMainWindow()
-        window.setWindowTitle('Dynamic Wallpaper Settings')
-        window.resize(1050, 750)
-        
-        web_view = QWebEngineView()
-        web_view.setUrl(QUrl("http://127.0.0.1:5000"))
-        window.setCentralWidget(web_view)
-        
         window.show()
-        
-        # Run the GUI event loop
-        sys.exit(app_gui.exec())
+    
+    # 執行 GUI 事件迴圈
+    sys.exit(app_gui.exec())

@@ -331,7 +331,9 @@ class WallpaperWindow(QMainWindow):
         except Exception as e:
             logging.error(f"處理 nativeEvent 時發生錯誤: {e}")
             
-        return super().nativeEvent(eventType, message)
+        # [修改 4] 不要呼叫 super().nativeEvent，這在 PyQt6 很容易導致記憶體存取違規崩潰
+        # 回傳 False, 0 告訴 Qt 我們沒有攔截此事件，請繼續正常處理
+        return False, 0
 
     def restart_wallpaper(self):
         cfg = load_config()
